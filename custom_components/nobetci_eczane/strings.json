@@ -1,0 +1,37 @@
+{
+  "title": "Nöbetçi Eczane",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select province",
+        "description": "Data is provided by the İstanbul Chamber of Pharmacists.",
+        "data": {
+          "province_code": "Province"
+        },
+        "data_description": {
+          "province_code": "Only provinces supported by the official source are shown."
+        }
+      },
+      "district": {
+        "title": "Select district",
+        "data": {
+          "district": "District"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the official pharmacy service.",
+      "no_districts": "The service returned no districts."
+    },
+    "abort": {
+      "already_configured": "This district is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_check": {
+        "name": "Last successful check"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "title": "Notdienstapotheke",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Provinz auswählen",
+        "description": "Die Daten werden von der Apothekerkammer Istanbul bereitgestellt.",
+        "data": {"province_code": "Provinz"},
+        "data_description": {"province_code": "Es werden nur vom offiziellen Dienst unterstützte Provinzen angezeigt."}
+      },
+      "district": {
+        "title": "Bezirk auswählen",
+        "data": {"district": "Bezirk"}
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum offiziellen Apothekendienst fehlgeschlagen.",
+      "no_districts": "Der Dienst hat keine Bezirke zurückgegeben."
+    },
+    "abort": {"already_configured": "Dieser Bezirk ist bereits konfiguriert."}
+  },
+  "entity": {
+    "sensor": {
+      "last_check": {"name": "Letzte erfolgreiche Prüfung"}
+    }
+  }
+}

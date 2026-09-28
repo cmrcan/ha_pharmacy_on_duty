@@ -1,0 +1,27 @@
+{
+  "title": "Nöbetçi Eczane",
+  "config": {
+    "step": {
+      "user": {
+        "title": "İl seçin",
+        "description": "Veriler İstanbul Eczacı Odası tarafından sağlanır.",
+        "data": {"province_code": "İl"},
+        "data_description": {"province_code": "Yalnızca resmî kaynağın desteklediği iller gösterilir."}
+      },
+      "district": {
+        "title": "İlçe seçin",
+        "data": {"district": "İlçe"}
+      }
+    },
+    "error": {
+      "cannot_connect": "Resmî nöbetçi eczane servisine bağlanılamadı.",
+      "no_districts": "Servis ilçe listesi döndürmedi."
+    },
+    "abort": {"already_configured": "Bu ilçe zaten yapılandırılmış."}
+  },
+  "entity": {
+    "sensor": {
+      "last_check": {"name": "Son başarılı kontrol"}
+    }
+  }
+}
