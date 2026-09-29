@@ -158,7 +158,9 @@ class NobetciEczaneCard extends HTMLElement {
         if (!state.entity_id.startsWith("geo_location.")) return false;
         if (state.attributes?.source !== source) return false;
         if (["unknown", "unavailable"].includes(state.state)) return false;
-        return this._districtMatches(state.attributes?.district);
+        return this._districtMatches(
+          state.attributes?.configured_district || state.attributes?.district,
+        );
       })
       .sort((a, b) => a.entity_id.localeCompare(b.entity_id));
   }
@@ -168,7 +170,7 @@ class NobetciEczaneCard extends HTMLElement {
 
     const representatives = new Map();
     for (const state of this._geoStates()) {
-      const key = `${state.attributes?.province || ""}:${state.attributes?.district || ""}`;
+      const key = `${state.attributes?.province || ""}:${state.attributes?.configured_district || state.attributes?.district || ""}`;
       if (!representatives.has(key)) representatives.set(key, state.entity_id);
     }
     if (representatives.size) return [...representatives.values()];
@@ -195,6 +197,7 @@ class NobetciEczaneCard extends HTMLElement {
           entity_id: state.entity_id,
           name: state.attributes?.friendly_name,
           phone: state.attributes?.phone,
+          phone_e164: state.attributes?.phone_e164,
           address: state.attributes?.address,
           directions: state.attributes?.directions,
           latitude: Number(state.attributes?.latitude),
@@ -202,6 +205,7 @@ class NobetciEczaneCard extends HTMLElement {
           distance_km: Number.isFinite(distance) ? distance : null,
           duty_ends: state.attributes?.duty_ends,
           district: state.attributes?.district,
+          configured_district: state.attributes?.configured_district,
           province: state.attributes?.province,
           data_source: state.attributes?.data_source,
           source_url: state.attributes?.source_url,
@@ -272,13 +276,14 @@ class NobetciEczaneCard extends HTMLElement {
           border-radius: 999px;
           padding: 4px 8px;
         }
-        .address, .directions {
+        .address, .location, .directions {
           color: var(--secondary-text-color);
           font-size: 13px;
           line-height: 1.45;
           margin-top: 6px;
           white-space: pre-line;
         }
+        .location { font-size: 12px; margin-top: 4px; }
         .directions { font-size: 12px; }
         .actions { display: flex; gap: 8px; margin-top: 12px; }
         .action {
@@ -405,6 +410,14 @@ class NobetciEczaneCard extends HTMLElement {
       address.textContent = pharmacy.address;
       article.append(address);
     }
+    if (pharmacy.district || pharmacy.province) {
+      const location = document.createElement("div");
+      location.className = "location";
+      location.textContent = [pharmacy.district, pharmacy.province]
+        .filter(Boolean)
+        .join(" · ");
+      article.append(location);
+    }
     if (this._config.show_directions !== false && pharmacy.directions) {
       const directions = document.createElement("div");
       directions.className = "directions";
@@ -415,7 +428,9 @@ class NobetciEczaneCard extends HTMLElement {
     const actions = document.createElement("div");
     actions.className = "actions";
     if (pharmacy.phone) {
-      actions.append(this._actionLink(`tel:+90${pharmacy.phone}`, "mdi:phone", copy.call, true));
+      const digits = String(pharmacy.phone).replace(/\D/g, "").replace(/^0/, "");
+      const phoneHref = pharmacy.phone_e164 || `+90${digits}`;
+      actions.append(this._actionLink(`tel:${phoneHref}`, "mdi:phone", copy.call, true));
     }
     if (Number.isFinite(pharmacy.latitude) && Number.isFinite(pharmacy.longitude)) {
       const destination = `${pharmacy.latitude},${pharmacy.longitude}`;
@@ -466,7 +481,8 @@ window.customCards.push({
       config: {
         type: "custom:nobetci-eczane-card",
         source: state.attributes.source,
-        district: state.attributes.district,
+        district:
+          state.attributes.configured_district || state.attributes.district,
       },
     };
   },

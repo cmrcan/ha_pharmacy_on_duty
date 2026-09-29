@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
 import json
 import re
+from time import monotonic
 from typing import Any
 
 from aiohttp import ClientError, ClientSession
@@ -14,7 +16,11 @@ from aiohttp import ClientError, ClientSession
 from .const import SOURCE_URL
 
 API_URL = f"{SOURCE_URL}index.php"
-USER_AGENT = "HomeAssistant-NobetciEczane/0.3.0"
+USER_AGENT = (
+    "HomeAssistant-NobetciEczane/0.4.2 "
+    "(+https://github.com/cmrcan/HA_Pharmacy_on_Duty)"
+)
+CACHE_TTL_SECONDS = 60
 
 
 class NobetciEczaneError(Exception):
@@ -114,6 +120,11 @@ class Pharmacy:
     latitude: float | None
     longitude: float | None
     duty_ends: str | None
+    province: str
+    district: str
+    neighborhood: str
+    subdistrict: str
+    postal_code: str
     distance_km: float | None = None
 
     @classmethod
@@ -129,15 +140,40 @@ class Pharmacy:
             except (TypeError, ValueError):
                 return None
 
+        address = html_to_text(payload.get("adres"), "Adres")
+        if not address:
+            street = " ".join(
+                part
+                for part in (
+                    str(payload.get("cadde_sokak") or "").strip(),
+                    str(payload.get("bina_kapi") or "").strip(),
+                )
+                if part
+            )
+            address = ", ".join(
+                part
+                for part in (
+                    str(payload.get("mahalle") or "").strip(),
+                    street,
+                    str(payload.get("semt") or "").strip(),
+                )
+                if part
+            )
+
         return cls(
-            registration_id=str(payload.get("sicil", "")),
-            name=str(payload.get("eczane_ad", "")).strip(),
+            registration_id=str(payload.get("sicil") or ""),
+            name=str(payload.get("eczane_ad") or "").strip(),
             phone=normalize_phone(payload.get("eczane_tel")),
-            address=html_to_text(payload.get("adres"), "Adres"),
+            address=address,
             directions=html_to_text(payload.get("tarif"), "Tarif"),
             latitude=coordinate("lat"),
             longitude=coordinate("lng"),
             duty_ends=(str(payload["nobet_bitis"]) if payload.get("nobet_bitis") else None),
+            province=str(payload.get("il") or "").strip(),
+            district=str(payload.get("ilce") or "").strip(),
+            neighborhood=str(payload.get("mahalle") or "").strip(),
+            subdistrict=str(payload.get("semt") or "").strip(),
+            postal_code=str(payload.get("posta_kodu") or "").strip(),
         )
 
 
@@ -146,15 +182,27 @@ class NobetciEczaneClient:
 
     def __init__(self, session: ClientSession) -> None:
         self._session = session
-        self._headers = {"User-Agent": USER_AGENT}
+        self._headers = {
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Referer": SOURCE_URL,
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        self._token: str | None = None
+        self._pharmacy_cache: tuple[Pharmacy, ...] | None = None
+        self._pharmacy_cache_time = 0.0
+        self._cache_lock = asyncio.Lock()
 
-    async def _async_get_token(self) -> str:
+    async def _async_get_token(self, *, force: bool = False) -> str:
+        if self._token is not None and not force:
+            return self._token
         try:
             async with self._session.get(
                 SOURCE_URL, headers=self._headers, timeout=15
             ) as response:
                 response.raise_for_status()
-                return extract_token(await response.text())
+                self._token = extract_token(await response.text())
+                return self._token
         except NobetciEczaneResponseError:
             raise
         except (ClientError, TimeoutError) as err:
@@ -164,8 +212,8 @@ class NobetciEczaneClient:
         # The token can rotate between the GET and POST (observed at midnight),
         # so retry the complete handshake once when the service rejects it.
         last_message = "Unknown service response"
-        for _attempt in range(2):
-            token = await self._async_get_token()
+        for attempt in range(2):
+            token = await self._async_get_token(force=attempt > 0)
             data = {"jx": "1", "islem": operation, "h": token, **parameters}
             try:
                 async with self._session.post(
@@ -183,6 +231,7 @@ class NobetciEczaneClient:
                 raise NobetciEczaneResponseError("Unexpected JSON structure")
             if payload.get("error") == 0:
                 return payload
+            self._token = None
             last_message = html_to_text(str(payload.get("message", last_message)))
 
         raise NobetciEczaneResponseError(last_message)
@@ -210,3 +259,36 @@ class NobetciEczaneClient:
         return [
             Pharmacy.from_payload(item) for item in pharmacies if isinstance(item, dict)
         ]
+
+    async def async_get_all_pharmacies(self) -> list[Pharmacy]:
+        """Return all active pharmacies with full marker metadata.
+
+        The official page uses this operation to populate its map. A short cache
+        coalesces simultaneous config-entry refreshes into one source request.
+        """
+        now = monotonic()
+        if (
+            self._pharmacy_cache is not None
+            and now - self._pharmacy_cache_time < CACHE_TTL_SECONDS
+        ):
+            return list(self._pharmacy_cache)
+
+        async with self._cache_lock:
+            now = monotonic()
+            if (
+                self._pharmacy_cache is not None
+                and now - self._pharmacy_cache_time < CACHE_TTL_SECONDS
+            ):
+                return list(self._pharmacy_cache)
+
+            payload = await self._async_post("get_eczane_markers")
+            pharmacies = payload.get("eczaneler")
+            if not isinstance(pharmacies, list):
+                raise NobetciEczaneResponseError("Pharmacy marker list is missing")
+            self._pharmacy_cache = tuple(
+                Pharmacy.from_payload(item)
+                for item in pharmacies
+                if isinstance(item, dict)
+            )
+            self._pharmacy_cache_time = monotonic()
+            return list(self._pharmacy_cache)

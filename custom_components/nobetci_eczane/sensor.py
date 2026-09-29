@@ -11,7 +11,13 @@ from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_DISTRICT, CONF_PROVINCE, DOMAIN, SOURCE_NAME, SOURCE_URL
+from .const import (
+    CONF_UPDATE_INTERVAL_MINUTES,
+    DEFAULT_UPDATE_INTERVAL_MINUTES,
+    DOMAIN,
+    SOURCE_NAME,
+    SOURCE_URL,
+)
 from .coordinator import NobetciEczaneCoordinator
 
 
@@ -57,8 +63,12 @@ class DutyPharmacyLastCheckSensor(
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "integration": DOMAIN,
-            "province": self.entry.data[CONF_PROVINCE],
-            "district": self.entry.data[CONF_DISTRICT],
+            "province": self.coordinator.province,
+            "district": self.coordinator.district,
+            "radius_km": self.coordinator.radius_km,
+            "update_interval_minutes": self.entry.options.get(
+                CONF_UPDATE_INTERVAL_MINUTES, DEFAULT_UPDATE_INTERVAL_MINUTES
+            ),
             "source": SOURCE_NAME,
             "source_url": SOURCE_URL,
             "pharmacy_count": len(self.coordinator.data.pharmacies),

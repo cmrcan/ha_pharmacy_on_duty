@@ -58,6 +58,21 @@ test("kart doğru source ve ilçeyi mesafeye göre listeler", () => {
           longitude: 29.2,
         },
       },
+      "geo_location.komsu_ilce": {
+        entity_id: "geo_location.komsu_ilce",
+        state: "0.8",
+        attributes: {
+          source: "nobetci_eczane",
+          configured_district: "Sarıyer",
+          district: "Beşiktaş",
+          province: "İstanbul",
+          friendly_name: "Komşu İlçede Daha Yakın",
+          phone: "02165551234",
+          phone_e164: "+902165551234",
+          latitude: 41.15,
+          longitude: 29.05,
+        },
+      },
       "geo_location.diger": {
         entity_id: "geo_location.diger",
         state: "0.2",
@@ -68,8 +83,9 @@ test("kart doğru source ve ilçeyi mesafeye göre listeler", () => {
 
   assert.deepEqual(
     Array.from(card._pharmacies(), (pharmacy) => pharmacy.name),
-    ["Yakın", "Uzak"],
+    ["Komşu İlçede Daha Yakın", "Yakın", "Uzak"],
   );
+  assert.equal(card._pharmacies()[0].phone_e164, "+902165551234");
 });
 
 test("yenileme için her ilçe koordinatöründen tek entity seçer", () => {

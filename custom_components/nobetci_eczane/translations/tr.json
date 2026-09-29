@@ -9,8 +9,18 @@
         "data_description": {"province_code": "Yalnızca resmî kaynağın desteklediği iller gösterilir."}
       },
       "district": {
-        "title": "İlçe seçin",
-        "data": {"district": "İlçe"}
+        "title": "İlçe ve arama yarıçapı seçin",
+        "description": "Seçilen ildeki eczaneler Home Assistant ev konumuna uzaklıklarına göre filtrelenir. Yarıçap içindeki komşu ilçe eczaneleri de dahil edilir.",
+        "data": {
+          "district": "Ana ilçe",
+          "radius_km": "Arama yarıçapı",
+          "update_interval_minutes": "Güncelleme aralığı"
+        },
+        "data_description": {
+          "district": "Bu yapılandırmayı tanımlamak ve entity'leri gruplamak için kullanılır.",
+          "radius_km": "Home Assistant ev konumundan kuş uçuşu azami mesafe.",
+          "update_interval_minutes": "Resmî kaynağın yenilenme sıklığı. En az 15 dakika."
+        }
       }
     },
     "error": {
@@ -18,6 +28,38 @@
       "no_districts": "Servis ilçe listesi döndürmedi."
     },
     "abort": {"already_configured": "Bu ilçe zaten yapılandırılmış."}
+  },
+  "options": {
+    "error": {
+      "cannot_connect": "Resmî nöbetçi eczane servisine bağlanılamadı.",
+      "no_districts": "Servis ilçe listesi döndürmedi."
+    },
+    "step": {
+      "init": {
+        "title": "İl seçin",
+        "description": "Tüm parametreler entegrasyonun Yapılandır işlemi üzerinden değiştirilebilir.",
+        "data": {
+          "province_code": "İl"
+        },
+        "data_description": {
+          "province_code": "Seçilen ilin ilçe listesi sonraki ekranda yüklenir."
+        }
+      },
+      "settings": {
+        "title": "Nöbetçi eczane ayarları",
+        "description": "Eczaneler Home Assistant ev konumundan yarıçapa göre seçilir. Yarıçap içindeki komşu ilçe eczaneleri de dahil edilir.",
+        "data": {
+          "district": "Ana ilçe",
+          "radius_km": "Arama yarıçapı",
+          "update_interval_minutes": "Güncelleme aralığı"
+        },
+        "data_description": {
+          "district": "Yapılandırmayı tanımlar; yarıçap sonuçlarını ilçe sınırıyla kısıtlamaz.",
+          "radius_km": "Home Assistant ev konumundan kuş uçuşu azami mesafe.",
+          "update_interval_minutes": "Resmî kaynağın yenilenme sıklığı. En az 15 dakika."
+        }
+      }
+    }
   },
   "entity": {
     "sensor": {

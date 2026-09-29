@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from math import asin, cos, radians, sin, sqrt
 
@@ -14,7 +14,19 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import NobetciEczaneClient, NobetciEczaneError, Pharmacy
-from .const import CONF_DISTRICT, DEFAULT_UPDATE_INTERVAL, DOMAIN
+from .const import (
+    CONF_DISTRICT,
+    CONF_PROVINCE,
+    CONF_RADIUS_KM,
+    CONF_UPDATE_INTERVAL_MINUTES,
+    DEFAULT_RADIUS_KM,
+    DEFAULT_UPDATE_INTERVAL_MINUTES,
+    DOMAIN,
+    MAX_RADIUS_KM,
+    MAX_UPDATE_INTERVAL_MINUTES,
+    MIN_RADIUS_KM,
+    MIN_UPDATE_INTERVAL_MINUTES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,20 +66,37 @@ class NobetciEczaneCoordinator(DataUpdateCoordinator[DutyPharmacyData]):
         client: NobetciEczaneClient,
     ) -> None:
         self.client = client
-        self.district = entry.data[CONF_DISTRICT]
+        self.district = entry.options.get(CONF_DISTRICT, entry.data[CONF_DISTRICT])
+        self.province = entry.options.get(CONF_PROVINCE, entry.data[CONF_PROVINCE])
+        self.radius_km = max(
+            MIN_RADIUS_KM,
+            min(MAX_RADIUS_KM, float(entry.options.get(CONF_RADIUS_KM, DEFAULT_RADIUS_KM))),
+        )
+        interval_minutes = max(
+            MIN_UPDATE_INTERVAL_MINUTES,
+            min(
+                MAX_UPDATE_INTERVAL_MINUTES,
+                int(
+                    entry.options.get(
+                        CONF_UPDATE_INTERVAL_MINUTES,
+                        DEFAULT_UPDATE_INTERVAL_MINUTES,
+                    )
+                ),
+            ),
+        )
         super().__init__(
             hass,
             logger=_LOGGER,
-            name=f"{DOMAIN}_{self.district}",
+            name=f"{DOMAIN}_{self.province}_{self.district}",
             config_entry=entry,
-            update_interval=DEFAULT_UPDATE_INTERVAL,
+            update_interval=timedelta(minutes=interval_minutes),
             always_update=False,
         )
 
     async def _async_update_data(self) -> DutyPharmacyData:
         try:
             async with asyncio.timeout(20):
-                pharmacies = await self.client.async_get_pharmacies(self.district)
+                pharmacies = await self.client.async_get_all_pharmacies()
         except NobetciEczaneError as err:
             raise UpdateFailed(str(err)) from err
 
@@ -75,18 +104,21 @@ class NobetciEczaneCoordinator(DataUpdateCoordinator[DutyPharmacyData]):
         home_longitude = self.hass.config.longitude
         enriched: list[Pharmacy] = []
         for pharmacy in pharmacies:
-            distance: float | None = None
-            if pharmacy.latitude is not None and pharmacy.longitude is not None:
-                distance = round(
-                    haversine_km(
-                        home_latitude,
-                        home_longitude,
-                        pharmacy.latitude,
-                        pharmacy.longitude,
-                    ),
-                    2,
-                )
-            enriched.append(replace(pharmacy, distance_km=distance))
+            if pharmacy.province.casefold() != self.province.casefold():
+                continue
+            if pharmacy.latitude is None or pharmacy.longitude is None:
+                continue
+            distance = round(
+                haversine_km(
+                    home_latitude,
+                    home_longitude,
+                    pharmacy.latitude,
+                    pharmacy.longitude,
+                ),
+                2,
+            )
+            if distance <= self.radius_km:
+                enriched.append(replace(pharmacy, distance_km=distance))
 
         enriched.sort(
             key=lambda item: (

@@ -5,18 +5,23 @@
 ## Ne oluşturur?
 
 - Her aktif eczane için bir `geo_location` entity'si. Entity durumu, Home Assistant ev konumuna kuş uçuşu mesafedir.
-- Entity niteliklerinde telefon, adres, yol tarifi notu, koordinatlar, nöbet bitişi, il ve ilçe bilgileri.
+- Entity niteliklerinde telefon (`phone` ve `phone_e164`), adres, yol tarifi notu, koordinatlar, nöbet bitişi, il ve ilçe bilgileri.
+- Standart Home Assistant haritasında yeşil eczane işaretçisi.
 - **Son başarılı kontrol** tanı sensörü.
 - İsteğe bağlı **Nöbetçi Eczane Card**: bulunan eczaneleri mesafeye göre sıralar; arama ve Google Maps düğmeleri sunar.
 
-Nöbet sona erdiğinde ilgili konum entity'si kaldırılır, yeni eczaneler otomatik eklenir. Veriler 30 dakikada bir yenilenir. İstek doğrulama anahtarı her sorguda yeniden alınır; anahtar kod içine sabitlenmez.
+Nöbet sona erdiğinde veya yarıçap/il/ilçe ayarı değiştiğinde artık sonuçlarda bulunmayan konum entity'leri hem Home Assistant state listesinden hem entity registry'den otomatik kaldırılır; yeni eczaneler otomatik eklenir. Temizlik ilk yüklemede ve her başarılı veri güncellemesinde çalışır. Varsayılan yenileme aralığı 30 dakikadır ve entegrasyon seçeneklerinden 15–360 dakika arasında değiştirilebilir.
+
+Entegrasyon resmî harita verisini tek istekte alır, Home Assistant ev koordinatına göre seçilen yarıçap içinde yerel olarak filtreler ve mesafeye göre sıralar. Bu nedenle seçilen ilçenin sınırının hemen dışındaki daha yakın bir nöbetçi eczane de listelenir. İlçe seçimi kart gruplaması için kullanılır; sonuçlar yalnızca ilçe sınırına hapsedilmez.
 
 ## Kurulum
 
 1. `custom_components/nobetci_eczane` klasörünü Home Assistant içindeki `/config/custom_components/` klasörüne kopyalayın.
 2. Home Assistant'ı yeniden başlatın.
 3. **Ayarlar → Cihazlar ve Hizmetler → Entegrasyon Ekle → Nöbetçi Eczane** yolunu açın.
-4. İl ve ilçeyi seçin.
+4. İl, ana ilçe, arama yarıçapı ve güncelleme aralığını seçin.
+
+Daha sonra **Ayarlar → Cihazlar ve Hizmetler → Nöbetçi Eczane → Yapılandır** üzerinden il, ana ilçe, yarıçap ve güncelleme aralığının tamamını değiştirebilirsiniz. Mesafe hesabının merkezi Home Assistant'taki ev konumudur.
 
 ## Haritada gösterme
 
@@ -38,7 +43,7 @@ Birden fazla ilçe eklediyseniz aynı kaynak altındaki eczaneler aynı haritada
 Entegrasyon kart dosyasını şu adreste sunar:
 
 ```text
-/nobetci_eczane/nobetci-eczane-card.js?v=0.3.0
+/nobetci_eczane/nobetci-eczane-card.js?v=0.4.2
 ```
 
 **Ayarlar → Panolar → Kaynaklar** bölümüne bu adresi `JavaScript Module` olarak bir kez ekleyin. Ardından kartı ekleyin:
@@ -54,7 +59,7 @@ show_directions: true
 show_source: true
 ```
 
-`district` isteğe bağlıdır. Kaldırıldığında `nobetci_eczane` kaynağındaki tüm ilçeler tek kartta listelenir. Kart entity adına bağımlı değildir; nöbet listesi değiştiğinde yeni `geo_location` entity'lerini otomatik bulur.
+`district` isteğe bağlıdır. Verildiğinde o yapılandırmaya ait yarıçap sonuçlarını gösterir; sonuçlar arasında komşu ilçe eczaneleri bulunabilir. Kaldırıldığında `nobetci_eczane` kaynağındaki tüm yapılandırmalar tek kartta listelenir. Kart entity adına bağımlı değildir; nöbet listesi değiştiğinde yeni `geo_location` entity'lerini otomatik bulur. Bütün sonuçlar mesafeye göre sıralanır ve her eczanede telefon ile Google Maps navigasyon düğmeleri gösterilir.
 
 ## Neden Tile yerine geo_location ve özel kart?
 
@@ -62,7 +67,7 @@ Tile kart sabit bir entity kimliği bekler. Nöbetçi eczaneler ise nöbet deği
 
 ## 0.1.x sürümünden yükseltme
 
-Yükseltme sırasında eski **Nöbetçi eczaneler** ve **En yakın nöbetçi eczane** özet sensörleri entity registry'den kaldırılır. Panolardaki eski sensör tabanlı kart yapılandırmasını yukarıdaki `source` tabanlı yapılandırmayla değiştirin ve kart kaynağındaki önbellek parametresini `v=0.3.0` yapın.
+Yükseltme sırasında eski **Nöbetçi eczaneler** ve **En yakın nöbetçi eczane** özet sensörleri entity registry'den kaldırılır. Panolardaki eski sensör tabanlı kart yapılandırmasını yukarıdaki `source` tabanlı yapılandırmayla değiştirin ve kart kaynağındaki önbellek parametresini `v=0.4.2` yapın.
 
 ## Geliştirme ve npm build
 
@@ -94,4 +99,6 @@ Build işlemi esbuild kullanır, sürümü `package.json` içinden karta enjekte
 - Servis belgelenmiş genel amaçlı bir API değildir; resmî web arayüzünün kullandığı JSON yanıtı okunur.
 - Mesafe, Home Assistant ev koordinatından eczaneye kuş uçuşu hesaplanır; yol mesafesi değildir.
 - Koordinatı bulunmayan bir kayıt harita/konum entity'si olarak oluşturulamaz.
-- Kaynağa yük bindirmemek için varsayılan yenileme aralığı 30 dakikadır.
+- Kaynağa yük bindirmemek için varsayılan yenileme aralığı 30, izin verilen en düşük değer 15 dakikadır.
+- Yapılandırmalar aynı istemciyi ve kısa süreli önbelleği paylaşır; eşzamanlı güncellemeler tek kaynak isteğinde birleştirilir.
+- İstemci kendisini Home Assistant entegrasyonu olarak tanıtır, oturumu ve doğrulama anahtarını yeniden kullanır, kaynak reddederse el sıkışmayı yalnızca bir kez yeniler. CAPTCHA veya anti-bot mekanizmalarını aşmaya çalışmaz.

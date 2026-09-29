@@ -13,10 +13,10 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import Pharmacy
+from .cleanup import remove_orphaned_geolocation_entities
 from .const import (
-    CONF_DISTRICT,
-    CONF_PROVINCE,
     DOMAIN,
+    PHARMACY_MARKER_URL,
     SOURCE_NAME,
     SOURCE_URL,
 )
@@ -41,6 +41,18 @@ async def async_setup_entry(
             for pharmacy in coordinator.data.pharmacies
             if pharmacy.latitude is not None and pharmacy.longitude is not None
         }
+
+        removed_registry_entries = remove_orphaned_geolocation_entities(
+            hass,
+            entry,
+            current_ids,
+            managed_unique_ids={entity.unique_id for entity in entities.values()},
+        )
+        if removed_registry_entries:
+            _LOGGER.debug(
+                "Removed %s stale duty-pharmacy registry entries",
+                removed_registry_entries,
+            )
 
         new_entities: list[DutyPharmacyGeolocationEntity] = []
         for external_id in current_ids - entities.keys():
@@ -69,6 +81,7 @@ class DutyPharmacyGeolocationEntity(
     _attr_source = DOMAIN
     _attr_unit_of_measurement = UnitOfLength.KILOMETERS
     _attr_icon = "mdi:pharmacy"
+    _attr_entity_picture = PHARMACY_MARKER_URL
 
     def __init__(
         self,
@@ -114,15 +127,23 @@ class DutyPharmacyGeolocationEntity(
         pharmacy = self._pharmacy
         if pharmacy is None:
             return {}
+        phone = f"0{pharmacy.phone}" if len(pharmacy.phone) == 10 else pharmacy.phone
+        phone_e164 = f"+90{pharmacy.phone}" if len(pharmacy.phone) == 10 else None
         return {
             "external_id": self.external_id,
             "integration": DOMAIN,
-            "province": self.entry.data[CONF_PROVINCE],
-            "district": self.entry.data[CONF_DISTRICT],
-            "phone": pharmacy.phone,
+            "province": pharmacy.province or self.coordinator.province,
+            "district": pharmacy.district,
+            "configured_district": self.coordinator.district,
+            "phone": phone,
+            "phone_e164": phone_e164,
             "address": pharmacy.address,
             "directions": pharmacy.directions,
+            "neighborhood": pharmacy.neighborhood,
+            "subdistrict": pharmacy.subdistrict,
+            "postal_code": pharmacy.postal_code,
             "duty_ends": pharmacy.duty_ends,
+            "radius_km": self.coordinator.radius_km,
             "data_source": SOURCE_NAME,
             "source_url": SOURCE_URL,
         }

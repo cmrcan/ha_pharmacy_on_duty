@@ -74,6 +74,33 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(pharmacy.directions, "Metro yanı")
         self.assertAlmostEqual(pharmacy.latitude, 41.031282)
 
+    def test_marker_payload_includes_location_and_builds_address(self):
+        pharmacy = Pharmacy.from_payload(
+            {
+                "sicil": "12345",
+                "eczane_ad": "SINIR ECZANESİ",
+                "eczane_tel": "0 (216) 555 12 34",
+                "il": "İstanbul",
+                "ilce": "Üsküdar",
+                "mahalle": "Kısıklı Mahallesi",
+                "cadde_sokak": "Alemdar Caddesi",
+                "bina_kapi": "No: 8",
+                "semt": "Kısıklı",
+                "posta_kodu": "34692",
+                "lat": "41.025",
+                "lng": "29.075",
+            }
+        )
+        self.assertEqual(pharmacy.phone, "2165551234")
+        self.assertEqual(pharmacy.province, "İstanbul")
+        self.assertEqual(pharmacy.district, "Üsküdar")
+        self.assertEqual(pharmacy.neighborhood, "Kısıklı Mahallesi")
+        self.assertEqual(pharmacy.postal_code, "34692")
+        self.assertEqual(
+            pharmacy.address,
+            "Kısıklı Mahallesi, Alemdar Caddesi No: 8, Kısıklı",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
