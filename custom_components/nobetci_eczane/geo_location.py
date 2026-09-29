@@ -16,6 +16,7 @@ from .api import Pharmacy
 from .cleanup import remove_orphaned_geolocation_entities
 from .const import (
     DOMAIN,
+    CARD_VERSION,
     PHARMACY_MARKER_URL,
     SOURCE_NAME,
     SOURCE_URL,
@@ -81,7 +82,7 @@ class DutyPharmacyGeolocationEntity(
     _attr_source = DOMAIN
     _attr_unit_of_measurement = UnitOfLength.KILOMETERS
     _attr_icon = "mdi:pharmacy"
-    _attr_entity_picture = PHARMACY_MARKER_URL
+    _attr_entity_picture = f"{PHARMACY_MARKER_URL}?v={CARD_VERSION}"
 
     def __init__(
         self,
