@@ -35,6 +35,7 @@ Pharmacy = api.Pharmacy
 extract_token = api.extract_token
 html_to_text = api.html_to_text
 normalize_phone = api.normalize_phone
+turkish_title = api.turkish_title
 
 
 class ParserTests(unittest.TestCase):
@@ -56,6 +57,11 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(normalize_phone("0 (216) 641-91-34"), "2166419134")
         self.assertEqual(normalize_phone("+90 216 641 91 34"), "2166419134")
 
+    def test_turkish_title(self):
+        self.assertEqual(turkish_title("EBRU ECZANESİ"), "Ebru Eczanesi")
+        self.assertEqual(turkish_title("IŞIK ECZANESİ"), "Işık Eczanesi")
+        self.assertEqual(turkish_title("İPEK-ŞİFA ECZANESİ"), "İpek-Şifa Eczanesi")
+
     def test_pharmacy_payload(self):
         pharmacy = Pharmacy.from_payload(
             {
@@ -70,6 +76,7 @@ class ParserTests(unittest.TestCase):
             }
         )
         self.assertEqual(pharmacy.registration_id, "27538")
+        self.assertEqual(pharmacy.name, "Çekmeköy Yaşam Eczanesi")
         self.assertEqual(pharmacy.address, "Mimar Sinan Caddesi, 22C")
         self.assertEqual(pharmacy.directions, "Metro yanı")
         self.assertAlmostEqual(pharmacy.latitude, 41.031282)

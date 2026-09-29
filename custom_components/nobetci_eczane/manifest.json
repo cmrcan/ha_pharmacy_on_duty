@@ -3,10 +3,10 @@
   "name": "Nöbetçi Eczane",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": ["http", "lovelace"],
   "documentation": "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "requirements": [],
-  "version": "0.4.2"
+  "version": "0.5.1"
 }

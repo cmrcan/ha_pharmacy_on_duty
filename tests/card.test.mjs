@@ -145,3 +145,32 @@ test("konum yoksa tanı sensörü üzerinden yenileme yapabilir", () => {
 
   assert.deepEqual(Array.from(card._refreshEntityIds()), ["sensor.last_check"]);
 });
+
+test("kart ilk açılışta üç eczane gösterir ve genişletilince tümünü döndürür", () => {
+  const card = createCard({ source: "nobetci_eczane", max_items: 3 }, {});
+  const pharmacies = [1, 2, 3, 4, 5].map((id) => ({ name: `Eczane ${id}` }));
+
+  card._expanded = false;
+  assert.deepEqual(
+    Array.from(card._visiblePharmacies(pharmacies), (item) => item.name),
+    ["Eczane 1", "Eczane 2", "Eczane 3"],
+  );
+  card._expanded = true;
+  assert.equal(card._visiblePharmacies(pharmacies).length, 5);
+});
+
+test("navigasyon bağlantısı cihaz platformuna uygun oluşturulur", () => {
+  const card = createCard({ source: "nobetci_eczane" }, {});
+  const pharmacy = {
+    name: "Ebru Eczanesi",
+    latitude: 41.025,
+    longitude: 29.075,
+  };
+
+  assert.match(card._navigationUrl(pharmacy, "Android"), /^geo:/);
+  assert.match(card._navigationUrl(pharmacy, "iPhone"), /^https:\/\/maps\.apple\.com/);
+  assert.match(
+    card._navigationUrl(pharmacy, "Windows NT"),
+    /^https:\/\/www\.google\.com\/maps\/dir/,
+  );
+});

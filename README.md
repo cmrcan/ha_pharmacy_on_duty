@@ -7,8 +7,8 @@
 - Her aktif eczane için bir `geo_location` entity'si. Entity durumu, Home Assistant ev konumuna kuş uçuşu mesafedir.
 - Entity niteliklerinde telefon (`phone` ve `phone_e164`), adres, yol tarifi notu, koordinatlar, nöbet bitişi, il ve ilçe bilgileri.
 - Standart Home Assistant haritasında yeşil eczane işaretçisi.
-- **Son başarılı kontrol** tanı sensörü.
-- İsteğe bağlı **Nöbetçi Eczane Card**: bulunan eczaneleri mesafeye göre sıralar; arama ve Google Maps düğmeleri sunar.
+- Cihaz sayfasındaki **Tanılayıcı** bölümünde il, ana ilçe, yarıçap ve güncelleme aralığı kontrolleri ile **Son başarılı kontrol** sensörü.
+- **Nöbetçi Eczane Card**: ilk üç eczaneyi gösterir, tıklanınca tümünü mesafeye göre sıralar; arama ve Google Maps düğmeleri sunar.
 
 Nöbet sona erdiğinde veya yarıçap/il/ilçe ayarı değiştiğinde artık sonuçlarda bulunmayan konum entity'leri hem Home Assistant state listesinden hem entity registry'den otomatik kaldırılır; yeni eczaneler otomatik eklenir. Temizlik ilk yüklemede ve her başarılı veri güncellemesinde çalışır. Varsayılan yenileme aralığı 30 dakikadır ve entegrasyon seçeneklerinden 15–360 dakika arasında değiştirilebilir.
 
@@ -21,7 +21,7 @@ Entegrasyon resmî harita verisini tek istekte alır, Home Assistant ev koordina
 3. **Ayarlar → Cihazlar ve Hizmetler → Entegrasyon Ekle → Nöbetçi Eczane** yolunu açın.
 4. İl, ana ilçe, arama yarıçapı ve güncelleme aralığını seçin.
 
-Daha sonra **Ayarlar → Cihazlar ve Hizmetler → Nöbetçi Eczane → Yapılandır** üzerinden il, ana ilçe, yarıçap ve güncelleme aralığının tamamını değiştirebilirsiniz. Mesafe hesabının merkezi Home Assistant'taki ev konumudur.
+Daha sonra entegrasyonun cihaz sayfasındaki **Tanılayıcı** bölümünden il, ana ilçe, yarıçap ve güncelleme aralığının tamamını değiştirebilirsiniz. Mesafe hesabının merkezi Home Assistant'taki ev konumudur.
 
 ## Haritada gösterme
 
@@ -40,13 +40,13 @@ Birden fazla ilçe eklediyseniz aynı kaynak altındaki eczaneler aynı haritada
 
 ## Özel kart
 
-Entegrasyon kart dosyasını şu adreste sunar:
+Entegrasyon kart dosyasını şu adreste sunar ve Lovelace kaynağını otomatik kaydeder:
 
 ```text
-/nobetci_eczane/nobetci-eczane-card.js?v=0.4.2
+/nobetci_eczane/nobetci-eczane-card.js?v=0.5.1
 ```
 
-**Ayarlar → Panolar → Kaynaklar** bölümüne bu adresi `JavaScript Module` olarak bir kez ekleyin. Ardından kartı ekleyin:
+Home Assistant yeniden başladıktan sonra kart seçicide **Nöbetçi Eczane Card** adıyla görünür. İsterseniz YAML ile de ekleyebilirsiniz:
 
 ```yaml
 type: custom:nobetci-eczane-card
@@ -57,9 +57,10 @@ show_address: true
 show_distance: true
 show_directions: true
 show_source: true
+max_items: 3
 ```
 
-`district` isteğe bağlıdır. Verildiğinde o yapılandırmaya ait yarıçap sonuçlarını gösterir; sonuçlar arasında komşu ilçe eczaneleri bulunabilir. Kaldırıldığında `nobetci_eczane` kaynağındaki tüm yapılandırmalar tek kartta listelenir. Kart entity adına bağımlı değildir; nöbet listesi değiştiğinde yeni `geo_location` entity'lerini otomatik bulur. Bütün sonuçlar mesafeye göre sıralanır ve her eczanede telefon ile Google Maps navigasyon düğmeleri gösterilir.
+`district` isteğe bağlıdır. Verildiğinde o yapılandırmaya ait yarıçap sonuçlarını gösterir; sonuçlar arasında komşu ilçe eczaneleri bulunabilir. Kaldırıldığında `nobetci_eczane` kaynağındaki tüm yapılandırmalar tek kartta listelenir. Kart entity adına bağımlı değildir; nöbet listesi değiştiğinde yeni `geo_location` entity'lerini otomatik bulur. Başlık altında son güncelleme, yarıçap ve sonuç sayısı gösterilir. İlk `max_items` kayıt görünür; başlığa veya **Tümünü göster** düğmesine basılınca listenin tamamı açılır. Bütün sonuçlar mesafeye göre sıralanır. Her eczanede telefon düğmesi ile `mdi:directions` ikonlu navigasyon control button bulunur; Android'de varsayılan `geo:` işleyicisi, Apple cihazlarda sistem harita bağlantısı ve masaüstünde web haritası açılır.
 
 ## Neden Tile yerine geo_location ve özel kart?
 
@@ -67,7 +68,7 @@ Tile kart sabit bir entity kimliği bekler. Nöbetçi eczaneler ise nöbet deği
 
 ## 0.1.x sürümünden yükseltme
 
-Yükseltme sırasında eski **Nöbetçi eczaneler** ve **En yakın nöbetçi eczane** özet sensörleri entity registry'den kaldırılır. Panolardaki eski sensör tabanlı kart yapılandırmasını yukarıdaki `source` tabanlı yapılandırmayla değiştirin ve kart kaynağındaki önbellek parametresini `v=0.4.2` yapın.
+Yükseltme sırasında eski **Nöbetçi eczaneler** ve **En yakın nöbetçi eczane** özet sensörleri entity registry'den kaldırılır. Kart kaynağı entegrasyon tarafından otomatik kaydedilir ve sürüm yükseltmelerinde güncellenir. Panolardaki eski sensör tabanlı kart yapılandırmasını yukarıdaki `source` tabanlı yapılandırmayla değiştirin.
 
 ## Geliştirme ve npm build
 

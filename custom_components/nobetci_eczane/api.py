@@ -17,7 +17,7 @@ from .const import SOURCE_URL
 
 API_URL = f"{SOURCE_URL}index.php"
 USER_AGENT = (
-    "HomeAssistant-NobetciEczane/0.4.2 "
+    "HomeAssistant-NobetciEczane/0.5.1 "
     "(+https://github.com/cmrcan/HA_Pharmacy_on_Duty)"
 )
 CACHE_TTL_SECONDS = 60
@@ -108,6 +108,17 @@ def normalize_phone(phone: str | None) -> str:
     return digits
 
 
+def turkish_title(value: str | None) -> str:
+    """Convert uppercase source text to title case with Turkish I rules."""
+    text = (value or "").strip().translate(str.maketrans({"I": "ı", "İ": "i"})).lower()
+
+    def uppercase(match: re.Match[str]) -> str:
+        prefix, letter = match.groups()
+        return prefix + {"i": "İ", "ı": "I"}.get(letter, letter.upper())
+
+    return re.sub(r"(^|[\s\-/'(])([a-zçğıöşü])", uppercase, text)
+
+
 @dataclass(frozen=True, slots=True)
 class Pharmacy:
     """Normalized duty-pharmacy data."""
@@ -162,7 +173,7 @@ class Pharmacy:
 
         return cls(
             registration_id=str(payload.get("sicil") or ""),
-            name=str(payload.get("eczane_ad") or "").strip(),
+            name=turkish_title(str(payload.get("eczane_ad") or "")),
             phone=normalize_phone(payload.get("eczane_tel")),
             address=address,
             directions=html_to_text(payload.get("tarif"), "Tarif"),

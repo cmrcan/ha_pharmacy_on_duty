@@ -62,6 +62,14 @@
     }
   },
   "entity": {
+    "number": {
+      "radius_km": {"name": "Suchradius"},
+      "update_interval": {"name": "Aktualisierungsintervall"}
+    },
+    "select": {
+      "province": {"name": "Provinz"},
+      "district": {"name": "Hauptbezirk"}
+    },
     "sensor": {
       "last_check": {"name": "Letzte erfolgreiche Prüfung"}
     }

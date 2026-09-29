@@ -7,7 +7,6 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -19,6 +18,7 @@ from .const import (
     SOURCE_URL,
 )
 from .coordinator import NobetciEczaneCoordinator
+from .device import device_info
 
 
 async def async_setup_entry(
@@ -46,14 +46,7 @@ class DutyPharmacyLastCheckSensor(
         super().__init__(coordinator)
         self.entry = entry
         self._attr_unique_id = f"{entry.entry_id}_last_check"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=entry.title,
-            manufacturer=SOURCE_NAME,
-            model="Nöbetçi Eczane Web Servisi",
-            configuration_url=SOURCE_URL,
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = device_info(entry)
 
     @property
     def native_value(self):

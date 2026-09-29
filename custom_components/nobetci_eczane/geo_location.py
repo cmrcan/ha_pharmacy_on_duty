@@ -144,6 +144,10 @@ class DutyPharmacyGeolocationEntity(
             "postal_code": pharmacy.postal_code,
             "duty_ends": pharmacy.duty_ends,
             "radius_km": self.coordinator.radius_km,
+            "fetched_at": self.coordinator.data.fetched_at.isoformat(),
+            "update_interval_minutes": int(
+                self.coordinator.update_interval.total_seconds() / 60
+            ),
             "data_source": SOURCE_NAME,
             "source_url": SOURCE_URL,
         }

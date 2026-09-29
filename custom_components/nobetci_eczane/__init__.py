@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 from typing import TypeAlias
 
+from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.const import LOVELACE_DATA, MODE_STORAGE
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import NobetciEczaneClient
 from .const import (
     CARD_URL,
+    CARD_VERSION,
     CONF_DISTRICT,
     CONF_PROVINCE,
     CONF_PROVINCE_CODE,
@@ -29,7 +34,14 @@ from .coordinator import NobetciEczaneCoordinator
 
 NobetciEczaneConfigEntry: TypeAlias = ConfigEntry[NobetciEczaneCoordinator]
 
-PLATFORMS = [Platform.GEO_LOCATION, Platform.SENSOR]
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS = [
+    Platform.GEO_LOCATION,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -49,7 +61,40 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             ),
         ]
     )
+    await _async_register_card_resource(hass)
     return True
+
+
+async def _async_register_card_resource(hass: HomeAssistant) -> None:
+    """Register or update the bundled Lovelace card resource."""
+    resource_url = f"{CARD_URL}?v={CARD_VERSION}"
+    lovelace = hass.data.get(LOVELACE_DATA)
+    if lovelace is None:
+        _LOGGER.warning("Lovelace is unavailable; custom card was not registered")
+        return
+
+    try:
+        if lovelace.resource_mode != MODE_STORAGE:
+            frontend.add_extra_js_url(hass, resource_url)
+            return
+
+        resources = lovelace.resources
+        # Force storage to load before async_items(); otherwise existing resources
+        # can be treated as an empty list during early startup.
+        await resources.async_get_info()
+        for item in resources.async_items():
+            if item.get("url", "").split("?", 1)[0] != CARD_URL:
+                continue
+            if item["url"] != resource_url or item.get("res_type") != "module":
+                await resources.async_update_item(
+                    item["id"], {"res_type": "module", "url": resource_url}
+                )
+            return
+        await resources.async_create_item(
+            {"res_type": "module", "url": resource_url}
+        )
+    except Exception:  # noqa: BLE001 - card failure must not block the integration
+        _LOGGER.exception("Unable to register the Nöbetçi Eczane Lovelace card")
 
 
 async def async_setup_entry(

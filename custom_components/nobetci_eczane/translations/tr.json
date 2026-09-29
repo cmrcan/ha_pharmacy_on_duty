@@ -62,6 +62,14 @@
     }
   },
   "entity": {
+    "number": {
+      "radius_km": {"name": "Arama yarıçapı"},
+      "update_interval": {"name": "Güncelleme aralığı"}
+    },
+    "select": {
+      "province": {"name": "İl"},
+      "district": {"name": "Ana ilçe"}
+    },
     "sensor": {
       "last_check": {"name": "Son başarılı kontrol"}
     }

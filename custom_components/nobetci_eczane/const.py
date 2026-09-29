@@ -25,4 +25,4 @@ SOURCE_URL = "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/"
 
 CARD_URL = "/nobetci_eczane/nobetci-eczane-card.js"
 PHARMACY_MARKER_URL = "/nobetci_eczane/pharmacy-marker.svg"
-CARD_VERSION = "0.4.2"
+CARD_VERSION = "0.5.1"

@@ -1,6 +1,6 @@
 {
   "name": "nobetci-eczane-ha",
-  "version": "0.4.2",
+  "version": "0.5.1",
   "private": true,
   "description": "Home Assistant duty-pharmacy integration and custom card",
   "type": "module",

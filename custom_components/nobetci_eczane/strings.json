@@ -68,6 +68,22 @@
     }
   },
   "entity": {
+    "number": {
+      "radius_km": {
+        "name": "Search radius"
+      },
+      "update_interval": {
+        "name": "Update interval"
+      }
+    },
+    "select": {
+      "province": {
+        "name": "Province"
+      },
+      "district": {
+        "name": "Primary district"
+      }
+    },
     "sensor": {
       "last_check": {
         "name": "Last successful check"
