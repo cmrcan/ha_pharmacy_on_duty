@@ -43,7 +43,7 @@ Birden fazla ilçe eklediyseniz aynı kaynak altındaki eczaneler aynı haritada
 Entegrasyon kart dosyasını şu adreste sunar ve Lovelace kaynağını otomatik kaydeder:
 
 ```text
-/nobetci_eczane/nobetci-eczane-card.js?v=0.5.1
+/nobetci_eczane/nobetci-eczane-card.js?v=0.5.5
 ```
 
 Home Assistant yeniden başladıktan sonra kart seçicide **Nöbetçi Eczane Card** adıyla görünür. İsterseniz YAML ile de ekleyebilirsiniz:

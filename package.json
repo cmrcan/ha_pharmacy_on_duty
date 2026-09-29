@@ -1,11 +1,12 @@
 {
   "name": "nobetci-eczane-ha",
-  "version": "0.5.1",
+  "version": "0.5.5",
   "private": true,
   "description": "Home Assistant duty-pharmacy integration and custom card",
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "release": "node scripts/release.mjs",
     "dev": "node scripts/build.mjs --watch",
     "test": "npm run build && node --test tests/card.test.mjs",
     "check": "node --check src/nobetci-eczane-card.js && node --check scripts/build.mjs && npm test"

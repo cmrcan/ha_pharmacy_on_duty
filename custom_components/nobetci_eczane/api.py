@@ -17,7 +17,7 @@ from .const import SOURCE_URL
 
 API_URL = f"{SOURCE_URL}index.php"
 USER_AGENT = (
-    "HomeAssistant-NobetciEczane/0.5.1 "
+    "HomeAssistant-NobetciEczane/0.5.5 "
     "(+https://github.com/cmrcan/HA_Pharmacy_on_Duty)"
 )
 CACHE_TTL_SECONDS = 60
