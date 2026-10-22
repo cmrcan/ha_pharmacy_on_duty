@@ -18,7 +18,7 @@
         },
         "data_description": {
           "district": "Bu yapılandırmayı tanımlamak ve entity'leri gruplamak için kullanılır.",
-          "radius_km": "Home Assistant ev konumundan kuş uçuşu azami mesafe.",
+          "radius_km": "Home Assistant ev konumundan kuş uçuşu mesafe. Seçenekler: 3, 6, 9 veya 12 km.",
           "update_interval_minutes": "Resmî kaynağın yenilenme sıklığı. En az 15 dakika."
         }
       }
@@ -55,7 +55,7 @@
         },
         "data_description": {
           "district": "Yapılandırmayı tanımlar; yarıçap sonuçlarını ilçe sınırıyla kısıtlamaz.",
-          "radius_km": "Home Assistant ev konumundan kuş uçuşu azami mesafe.",
+          "radius_km": "Home Assistant ev konumundan kuş uçuşu mesafe. Seçenekler: 3, 6, 9 veya 12 km.",
           "update_interval_minutes": "Resmî kaynağın yenilenme sıklığı. En az 15 dakika."
         }
       }

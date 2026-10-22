@@ -18,7 +18,7 @@
         },
         "data_description": {
           "district": "Dient zur Identifizierung dieser Konfiguration und zur Gruppierung ihrer Entitäten.",
-          "radius_km": "Maximale Luftlinienentfernung vom Home-Assistant-Standort.",
+          "radius_km": "Luftlinie vom Home Assistant-Heimstandort. Auswahl: 3, 6, 9 oder 12 km.",
           "update_interval_minutes": "Intervall für die Aktualisierung der offiziellen Quelle. Mindestens 15 Minuten."
         }
       }
@@ -55,7 +55,7 @@
         },
         "data_description": {
           "district": "Kennzeichnet diese Konfiguration; die Radius-Ergebnisse werden nicht auf Bezirksgrenzen beschränkt.",
-          "radius_km": "Maximale Luftlinienentfernung vom Home-Assistant-Standort.",
+          "radius_km": "Luftlinie vom Home Assistant-Heimstandort. Auswahl: 3, 6, 9 oder 12 km.",
           "update_interval_minutes": "Intervall für die Aktualisierung der offiziellen Quelle. Mindestens 15 Minuten."
         }
       }

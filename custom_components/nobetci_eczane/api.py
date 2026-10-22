@@ -15,13 +15,13 @@ from urllib.parse import urlsplit
 
 from aiohttp import ClientError, ClientSession
 
-from .const import SOURCE_URL
+from .const import RADIUS_PRESETS_KM, SOURCE_URL
 
 ORIGIN = "https://www.istanbuleczaciodasi.org.tr"
 API_URL = f"{ORIGIN}/api/nobetci-eczane-web/"
-RADIUS_PRESETS = (3, 6, 9, 12)
+RADIUS_PRESETS = RADIUS_PRESETS_KM
 USER_AGENT = (
-    "HomeAssistant-NobetciEczane/0.6.0 "
+    "HomeAssistant-NobetciEczane/0.6.1 "
     "(+https://github.com/cmrcan/HA_Pharmacy_on_Duty)"
 )
 CACHE_TTL_SECONDS = 60
@@ -112,10 +112,10 @@ def extract_token(page: str) -> str:
 
 
 def request_radius(radius_km: float) -> int:
-    """Round up to a supported query radius, then filter locally."""
-    if not isfinite(radius_km) or not 0 < radius_km <= RADIUS_PRESETS[-1]:
-        raise NobetciEczaneResponseError("Search radius must be between 1 and 12 km")
-    return next(radius for radius in RADIUS_PRESETS if radius >= radius_km)
+    """Validate the exact radius selected in Home Assistant."""
+    if radius_km not in RADIUS_PRESETS:
+        raise NobetciEczaneResponseError("Search radius must be 3, 6, 9 or 12 km")
+    return int(radius_km)
 
 
 def html_to_text(fragment: str | None, label: str | None = None) -> str:

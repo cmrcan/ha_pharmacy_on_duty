@@ -88,7 +88,7 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
         self,
     ):
         entry = SimpleNamespace(
-            options={"radius_km": 10},
+            options={"radius_km": 9},
             data={"province": "İstanbul", "district": "Çekmeköy"},
         )
         hass = SimpleNamespace(config=SimpleNamespace(latitude=41.03, longitude=29.22))
@@ -100,11 +100,11 @@ class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
             async_get_nearby_pharmacies=AsyncMock(return_value=rows)
         )
         instance = coordinator.NobetciEczaneCoordinator(hass, entry, client)
-        with patch.object(coordinator, "haversine_km", side_effect=[9.999, 10.001]):
+        with patch.object(coordinator, "haversine_km", side_effect=[8.999, 9.001]):
             data = await instance._async_update_data()
         self.assertEqual([p.registration_id for p in data.pharmacies], ["1"])
         self.assertEqual(data.pharmacies[0].district, "Sancaktepe")
-        client.async_get_nearby_pharmacies.assert_awaited_once_with(41.03, 29.22, 10)
+        client.async_get_nearby_pharmacies.assert_awaited_once_with(41.03, 29.22, 9)
 
     async def test_source_errors_do_not_become_empty_success(self):
         entry = SimpleNamespace(
@@ -133,7 +133,7 @@ class PhoneRoutingTests(unittest.IsolatedAsyncioTestCase):
         )
         self.coordinator = SimpleNamespace(
             client=self.client,
-            radius_km=10,
+            radius_km=12,
             last_update_success=True,
             data=SimpleNamespace(pharmacies=[api.Pharmacy.from_payload(ROW)]),
         )
@@ -166,7 +166,7 @@ class PhoneRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.connection.send_result.assert_called_once_with(
             1, {"phones": ["+902165551234"]}
         )
-        self.client.async_get_phone.assert_awaited_once_with("12009", 41, 29, 10)
+        self.client.async_get_phone.assert_awaited_once_with("12009", 41, 29, 12)
 
     async def test_unmanaged_entity_is_rejected(self):
         self.entity.platform = "other"
@@ -206,7 +206,7 @@ class PhoneRoutingTests(unittest.IsolatedAsyncioTestCase):
 
 
 class MigrationTests(unittest.IsolatedAsyncioTestCase):
-    async def test_existing_entries_keep_settings_and_cap_only_radius(self):
+    async def test_existing_entries_keep_settings_and_migrate_radius_presets(self):
         # Compile the actual migration function alone to avoid loading a full HA
         # server for this dependency-light suite.
         tree = ast.parse((ROOT / "__init__.py").read_text())
@@ -225,19 +225,30 @@ class MigrationTests(unittest.IsolatedAsyncioTestCase):
         namespace = {
             key: value for key, value in vars(constants).items() if key.isupper()
         }
+        namespace["normalize_radius_km"] = constants.normalize_radius_km
         exec(compile(code, str(ROOT / "__init__.py"), "exec"), namespace)
-        for before, after in ((10, 10), (100, 12), (3, 3)):
+        for before, after in (
+            (1, 3),
+            (5, 6),
+            (8, 9),
+            (10, 12),
+            (100, 12),
+            (3, 3),
+            (6, 6),
+            (9, 9),
+            (12, 12),
+        ):
             options = {
                 "radius_km": before,
                 "update_interval_minutes": 45,
                 "district": "Çekmeköy",
             }
-            entry = SimpleNamespace(version=4, options=options, data={})
+            entry = SimpleNamespace(version=5, options=options, data={})
             update = Mock()
             hass = SimpleNamespace(
                 config_entries=SimpleNamespace(async_update_entry=update)
             )
             self.assertTrue(await namespace["async_migrate_entry"](hass, entry))
             changed = update.call_args.kwargs
-            self.assertEqual(changed["version"], 5)
+            self.assertEqual(changed["version"], 6)
             self.assertEqual(changed["options"], {**options, "radius_km": after})

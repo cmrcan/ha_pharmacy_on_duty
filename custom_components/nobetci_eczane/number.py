@@ -6,6 +6,7 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, UnitOfLength, UnitOfTime
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (
@@ -17,6 +18,8 @@ from .const import (
     MAX_UPDATE_INTERVAL_MINUTES,
     MIN_RADIUS_KM,
     MIN_UPDATE_INTERVAL_MINUTES,
+    RADIUS_PRESETS_KM,
+    RADIUS_STEP_KM,
 )
 from .device import device_info
 
@@ -36,7 +39,7 @@ async def async_setup_entry(
                 DEFAULT_RADIUS_KM,
                 MIN_RADIUS_KM,
                 MAX_RADIUS_KM,
-                1,
+                RADIUS_STEP_KM,
                 UnitOfLength.KILOMETERS,
                 "mdi:radius-outline",
             ),
@@ -84,6 +87,8 @@ class DutyPharmacySettingNumber(NumberEntity):
         self._attr_native_step = step
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
+        if option_key == CONF_RADIUS_KM:
+            self._attr_mode = NumberMode.SLIDER
         self._attr_device_info = device_info(entry)
 
     @property
@@ -95,6 +100,11 @@ class DutyPharmacySettingNumber(NumberEntity):
         """Persist a new option value; the config-entry listener reloads it."""
         options = dict(self._entry.options)
         numeric_value = float(value)
+        if (
+            self._option_key == CONF_RADIUS_KM
+            and numeric_value not in RADIUS_PRESETS_KM
+        ):
+            raise HomeAssistantError("Search radius must be 3, 6, 9 or 12 km")
         options[self._option_key] = (
             int(numeric_value) if numeric_value.is_integer() else numeric_value
         )

@@ -30,6 +30,7 @@ from .const import (
     MAX_RADIUS_KM,
     MIN_RADIUS_KM,
     PHARMACY_MARKER_URL,
+    normalize_radius_km,
 )
 from .cleanup import remove_orphaned_geolocation_entities
 from .coordinator import NobetciEczaneCoordinator
@@ -94,9 +95,7 @@ async def _async_register_card_resource(hass: HomeAssistant) -> None:
                     item["id"], {"res_type": "module", "url": resource_url}
                 )
             return
-        await resources.async_create_item(
-            {"res_type": "module", "url": resource_url}
-        )
+        await resources.async_create_item({"res_type": "module", "url": resource_url})
     except Exception:  # noqa: BLE001 - card failure must not block the integration
         _LOGGER.exception("Unable to register the Nöbetçi Eczane Lovelace card")
 
@@ -169,5 +168,9 @@ async def async_migrate_entry(
             MIN_RADIUS_KM,
             min(MAX_RADIUS_KM, float(options.get(CONF_RADIUS_KM, DEFAULT_RADIUS_KM))),
         )
-        hass.config_entries.async_update_entry(entry, version=5, options=options)
+    if entry.version < 6:
+        options[CONF_RADIUS_KM] = normalize_radius_km(
+            options.get(CONF_RADIUS_KM, DEFAULT_RADIUS_KM)
+        )
+        hass.config_entries.async_update_entry(entry, version=6, options=options)
     return True

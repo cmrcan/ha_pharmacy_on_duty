@@ -29,11 +29,11 @@ from .const import (
     DEFAULT_RADIUS_KM,
     DEFAULT_UPDATE_INTERVAL_MINUTES,
     DOMAIN,
-    MAX_RADIUS_KM,
     MAX_UPDATE_INTERVAL_MINUTES,
-    MIN_RADIUS_KM,
     MIN_UPDATE_INTERVAL_MINUTES,
     PROVINCES,
+    RADIUS_PRESETS_KM,
+    normalize_radius_km,
 )
 
 
@@ -72,13 +72,15 @@ def _settings_schema(
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
-            vol.Required(CONF_RADIUS_KM, default=radius): selector.NumberSelector(
-                selector.NumberSelectorConfig(
-                    min=MIN_RADIUS_KM,
-                    max=MAX_RADIUS_KM,
-                    step=1,
-                    mode=selector.NumberSelectorMode.BOX,
-                    unit_of_measurement="km",
+            vol.Required(
+                CONF_RADIUS_KM, default=str(normalize_radius_km(radius))
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {"value": str(value), "label": f"{value} km"}
+                        for value in RADIUS_PRESETS_KM
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
             vol.Required(
@@ -99,7 +101,7 @@ def _settings_schema(
 class NobetciEczaneConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the integration setup flow."""
 
-    VERSION = 5
+    VERSION = 6
 
     @staticmethod
     @callback
@@ -156,7 +158,7 @@ class NobetciEczaneConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_PROVINCE_CODE: self._province_code,
                     CONF_PROVINCE: province,
                     CONF_DISTRICT: district,
-                    CONF_RADIUS_KM: user_input[CONF_RADIUS_KM],
+                    CONF_RADIUS_KM: int(user_input[CONF_RADIUS_KM]),
                     CONF_UPDATE_INTERVAL_MINUTES: user_input[
                         CONF_UPDATE_INTERVAL_MINUTES
                     ],
@@ -190,9 +192,7 @@ class NobetciEczaneOptionsFlow(OptionsFlow):
             self._province_code = user_input[CONF_PROVINCE_CODE]
             try:
                 client = NobetciEczaneClient(async_get_clientsession(self.hass))
-                self._districts = await client.async_get_districts(
-                    self._province_code
-                )
+                self._districts = await client.async_get_districts(self._province_code)
             except NobetciEczaneError:
                 errors["base"] = "cannot_connect"
             else:
@@ -222,10 +222,8 @@ class NobetciEczaneOptionsFlow(OptionsFlow):
                 CONF_PROVINCE_CODE: self._province_code,
                 CONF_PROVINCE: province,
                 CONF_DISTRICT: district,
-                CONF_RADIUS_KM: user_input[CONF_RADIUS_KM],
-                CONF_UPDATE_INTERVAL_MINUTES: user_input[
-                    CONF_UPDATE_INTERVAL_MINUTES
-                ],
+                CONF_RADIUS_KM: int(user_input[CONF_RADIUS_KM]),
+                CONF_UPDATE_INTERVAL_MINUTES: user_input[CONF_UPDATE_INTERVAL_MINUTES],
             }
             self.hass.config_entries.async_update_entry(
                 self.config_entry,

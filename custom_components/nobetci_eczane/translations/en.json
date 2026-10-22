@@ -18,7 +18,7 @@
         },
         "data_description": {
           "district": "Used to identify this configuration and group its entities.",
-          "radius_km": "Maximum straight-line distance from the Home Assistant home location.",
+          "radius_km": "Straight-line distance from the Home Assistant home location. Options: 3, 6, 9 or 12 km.",
           "update_interval_minutes": "How often the official source is refreshed. Minimum: 15 minutes."
         }
       }
@@ -55,7 +55,7 @@
         },
         "data_description": {
           "district": "Used to identify this configuration; it does not limit radius results to district boundaries.",
-          "radius_km": "Maximum straight-line distance from the Home Assistant home location.",
+          "radius_km": "Straight-line distance from the Home Assistant home location. Options: 3, 6, 9 or 12 km.",
           "update_interval_minutes": "How often the official source is refreshed. Minimum: 15 minutes."
         }
       }

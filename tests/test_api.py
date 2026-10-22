@@ -51,18 +51,10 @@ class ParserTests(unittest.TestCase):
             with self.assertRaises(api.NobetciEczaneResponseError):
                 extract_token(page)
 
-    def test_supported_radius_rounds_up_without_silently_truncating(self):
-        for value, expected in (
-            (1, 3),
-            (3, 3),
-            (4, 6),
-            (6, 6),
-            (7, 9),
-            (10, 12),
-            (12, 12),
-        ):
-            self.assertEqual(api.request_radius(value), expected)
-        for invalid in (0, 13, 100, float("nan"), float("inf")):
+    def test_supported_radius_only_accepts_exact_presets(self):
+        for value in (3, 6, 9, 12):
+            self.assertEqual(api.request_radius(value), value)
+        for invalid in (0, 1, 4, 5, 7, 10, 11, 13, 100, float("nan"), float("inf")):
             with self.assertRaises(api.NobetciEczaneResponseError):
                 api.request_radius(invalid)
 
@@ -230,8 +222,8 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
         session = Session(Response(boot_page(), cookie="private-session"), nearby(ROW))
         client = api.NobetciEczaneClient(session)
         first, second = await asyncio.gather(
-            client.async_get_nearby_pharmacies(41.03, 29.22, 10),
-            client.async_get_nearby_pharmacies(41.03, 29.22, 11),
+            client.async_get_nearby_pharmacies(41.03, 29.22, 12),
+            client.async_get_nearby_pharmacies(41.03, 29.22, 12),
         )
         self.assertEqual(first, second)
         self.assertEqual(len(session.calls), 2)

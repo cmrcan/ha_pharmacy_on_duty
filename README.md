@@ -12,7 +12,7 @@
 
 Nöbet sona erdiğinde veya yarıçap/il/ilçe ayarı değiştiğinde artık sonuçlarda bulunmayan konum entity'leri hem Home Assistant state listesinden hem entity registry'den otomatik kaldırılır; yeni eczaneler otomatik eklenir. Temizlik ilk yüklemede ve her başarılı veri güncellemesinde çalışır. Varsayılan yenileme aralığı 30 dakikadır ve entegrasyon seçeneklerinden 15–360 dakika arasında değiştirilebilir.
 
-Entegrasyon resmî web arayüzünün `nearby` servisini Home Assistant ev koordinatıyla çağırır. Servisin desteklediği 3, 6, 9 veya 12 km değerlerinden seçilen yarıçapı kapsayan en küçük değeri sorgular; sonuçları seçilen tam yarıçapa göre yerelde filtreler ve mesafeye göre sıralar. Yarıçap ayarı 1–12 km arasındadır. Bu nedenle seçilen ilçenin sınırının hemen dışındaki daha yakın bir nöbetçi eczane de listelenir. İlçe seçimi kart gruplaması için kullanılır; sonuçlar yalnızca ilçe sınırına hapsedilmez.
+Entegrasyon resmî web arayüzünün `nearby` servisini Home Assistant ev koordinatıyla çağırır. Yarıçap doğrudan servisin desteklediği **3, 6, 9 veya 12 km** seçeneklerinden seçilir. Sonuçlar aynı yarıçapla yerelde doğrulanır ve mesafeye göre sıralanır. Varsayılan yarıçap 12 km’dir. Kurulum ve seçenekler ekranında açılır liste, cihaz sayfasında 3 km adımlı yarıçap kontrolü bulunur. Bu nedenle seçilen ilçenin sınırının hemen dışındaki daha yakın bir nöbetçi eczane de listelenir. İlçe seçimi kart gruplaması için kullanılır; sonuçlar yalnızca ilçe sınırına hapsedilmez.
 
 ## Kurulum
 
@@ -43,7 +43,7 @@ Birden fazla ilçe eklediyseniz aynı kaynak altındaki eczaneler aynı haritada
 Entegrasyon kart dosyasını şu adreste sunar ve Lovelace kaynağını otomatik kaydeder:
 
 ```text
-/nobetci_eczane/nobetci-eczane-card.js?v=0.6.0
+/nobetci_eczane/nobetci-eczane-card.js?v=0.6.1
 ```
 
 Home Assistant yeniden başladıktan sonra kart seçicide **Nöbetçi Eczane Card** adıyla görünür. İsterseniz YAML ile de ekleyebilirsiniz:
@@ -109,4 +109,8 @@ Build işlemi esbuild kullanır, sürümü `package.json` içinden karta enjekte
 
 Eski `index.php` form istekleri yerine `/api/nobetci-eczane-web/` kullanılır. Sayfadaki `boot` JSON verisinden oturum anahtarı ve ilçe listesi okunur; `nearby` JSON isteği `X-Web-Token` başlığıyla gönderilir. Oturum reddedilirse anahtar bir kez yenilenir. Kendi tarayıcınızdan cookie veya token kopyalamanız gerekmez.
 
-Önceki sürümde 12 km üzerindeki yarıçap ayarları yükseltmede 12 km'ye indirilir. Varsayılan 10 km korunur (12 km sorgusu + yerelde 10 km filtresi). Yeni servisin listesinde telefon numarası bulunmadığından `phone`/`phone_e164` nitelikleri otomatik doldurulmaz; arama için güncel kartı kullanın. Telefon kullanan eski otomasyonların bu değişikliğe göre düzenlenmesi gerekir.
+0.6.0 sürümünde 12 km üzerindeki yarıçap ayarları 12 km'ye indirilmiştir. 0.6.1 sürümünde yalnızca 3, 6, 9 ve 12 km seçenekleri kullanılır; mevcut ara değerler bir üst seçeneğe taşınır (örneğin 5 → 6 km, 10 → 12 km). Yeni servisin listesinde telefon numarası bulunmadığından `phone`/`phone_e164` nitelikleri otomatik doldurulmaz; arama için güncel kartı kullanın. Telefon kullanan eski otomasyonların bu değişikliğe göre düzenlenmesi gerekir.
+
+## 0.6.1: Home Assistant yarıçap seçenekleri
+
+Yarıçap ayarı kaynağın desteklediği 3, 6, 9 ve 12 km değerleriyle sınırlandırıldı. API’ye seçilen değer doğrudan gönderilir. Eski ayarlar yükseltmede bir üst desteklenen değere taşınır; 12 km üzeri değerler 12 km olur. Mevcut yarıçap entity kimliği korunur. Diğer ayarlar ve güncelleme aralığı korunur.

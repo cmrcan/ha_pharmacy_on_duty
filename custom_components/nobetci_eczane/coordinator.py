@@ -22,10 +22,9 @@ from .const import (
     DEFAULT_RADIUS_KM,
     DEFAULT_UPDATE_INTERVAL_MINUTES,
     DOMAIN,
-    MAX_RADIUS_KM,
     MAX_UPDATE_INTERVAL_MINUTES,
-    MIN_RADIUS_KM,
     MIN_UPDATE_INTERVAL_MINUTES,
+    normalize_radius_km,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,9 +67,8 @@ class NobetciEczaneCoordinator(DataUpdateCoordinator[DutyPharmacyData]):
         self.client = client
         self.district = entry.options.get(CONF_DISTRICT, entry.data[CONF_DISTRICT])
         self.province = entry.options.get(CONF_PROVINCE, entry.data[CONF_PROVINCE])
-        self.radius_km = max(
-            MIN_RADIUS_KM,
-            min(MAX_RADIUS_KM, float(entry.options.get(CONF_RADIUS_KM, DEFAULT_RADIUS_KM))),
+        self.radius_km = normalize_radius_km(
+            entry.options.get(CONF_RADIUS_KM, DEFAULT_RADIUS_KM)
         )
         interval_minutes = max(
             MIN_UPDATE_INTERVAL_MINUTES,
