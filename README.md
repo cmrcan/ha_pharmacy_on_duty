@@ -5,14 +5,14 @@
 ## Ne oluşturur?
 
 - Her aktif eczane için bir `geo_location` entity'si. Entity durumu, Home Assistant ev konumuna kuş uçuşu mesafedir.
-- Entity niteliklerinde telefon (`phone` ve `phone_e164`), adres, yol tarifi notu, koordinatlar, nöbet bitişi, il ve ilçe bilgileri.
+- Entity niteliklerinde adres, yol tarifi notu, koordinatlar, nöbet bitişi, il ve ilçe bilgileri. Yeni servis telefon numaralarını listeden ayrı sunar; karttaki **Ara** düğmesi numaraları talep edildiğinde alır.
 - Standart Home Assistant haritasında yeşil eczane işaretçisi.
 - Cihaz sayfasındaki **Tanılayıcı** bölümünde il, ana ilçe, yarıçap ve güncelleme aralığı kontrolleri ile **Son başarılı kontrol** sensörü.
 - **Nöbetçi Eczane Card**: ilk üç eczaneyi gösterir, tıklanınca tümünü mesafeye göre sıralar; arama ve Google Maps düğmeleri sunar.
 
 Nöbet sona erdiğinde veya yarıçap/il/ilçe ayarı değiştiğinde artık sonuçlarda bulunmayan konum entity'leri hem Home Assistant state listesinden hem entity registry'den otomatik kaldırılır; yeni eczaneler otomatik eklenir. Temizlik ilk yüklemede ve her başarılı veri güncellemesinde çalışır. Varsayılan yenileme aralığı 30 dakikadır ve entegrasyon seçeneklerinden 15–360 dakika arasında değiştirilebilir.
 
-Entegrasyon resmî harita verisini tek istekte alır, Home Assistant ev koordinatına göre seçilen yarıçap içinde yerel olarak filtreler ve mesafeye göre sıralar. Bu nedenle seçilen ilçenin sınırının hemen dışındaki daha yakın bir nöbetçi eczane de listelenir. İlçe seçimi kart gruplaması için kullanılır; sonuçlar yalnızca ilçe sınırına hapsedilmez.
+Entegrasyon resmî web arayüzünün `nearby` servisini Home Assistant ev koordinatıyla çağırır. Servisin desteklediği 3, 6, 9 veya 12 km değerlerinden seçilen yarıçapı kapsayan en küçük değeri sorgular; sonuçları seçilen tam yarıçapa göre yerelde filtreler ve mesafeye göre sıralar. Yarıçap ayarı 1–12 km arasındadır. Bu nedenle seçilen ilçenin sınırının hemen dışındaki daha yakın bir nöbetçi eczane de listelenir. İlçe seçimi kart gruplaması için kullanılır; sonuçlar yalnızca ilçe sınırına hapsedilmez.
 
 ## Kurulum
 
@@ -43,7 +43,7 @@ Birden fazla ilçe eklediyseniz aynı kaynak altındaki eczaneler aynı haritada
 Entegrasyon kart dosyasını şu adreste sunar ve Lovelace kaynağını otomatik kaydeder:
 
 ```text
-/nobetci_eczane/nobetci-eczane-card.js?v=0.5.5
+/nobetci_eczane/nobetci-eczane-card.js?v=0.6.0
 ```
 
 Home Assistant yeniden başladıktan sonra kart seçicide **Nöbetçi Eczane Card** adıyla görünür. İsterseniz YAML ile de ekleyebilirsiniz:
@@ -60,7 +60,7 @@ show_source: true
 max_items: 3
 ```
 
-`district` isteğe bağlıdır. Verildiğinde o yapılandırmaya ait yarıçap sonuçlarını gösterir; sonuçlar arasında komşu ilçe eczaneleri bulunabilir. Kaldırıldığında `nobetci_eczane` kaynağındaki tüm yapılandırmalar tek kartta listelenir. Kart entity adına bağımlı değildir; nöbet listesi değiştiğinde yeni `geo_location` entity'lerini otomatik bulur. Başlık altında son güncelleme, yarıçap ve sonuç sayısı gösterilir. İlk `max_items` kayıt görünür; başlığa veya **Tümünü göster** düğmesine basılınca listenin tamamı açılır. Bütün sonuçlar mesafeye göre sıralanır. Her eczanede telefon düğmesi ile `mdi:directions` ikonlu navigasyon control button bulunur; Android'de varsayılan `geo:` işleyicisi, Apple cihazlarda sistem harita bağlantısı ve masaüstünde web haritası açılır.
+`district` isteğe bağlıdır. Verildiğinde o yapılandırmaya ait yarıçap sonuçlarını gösterir; sonuçlar arasında komşu ilçe eczaneleri bulunabilir. Kaldırıldığında `nobetci_eczane` kaynağındaki tüm yapılandırmalar tek kartta listelenir. Kart entity adına bağımlı değildir; nöbet listesi değiştiğinde yeni `geo_location` entity'lerini otomatik bulur. Başlık altında son güncelleme, yarıçap ve sonuç sayısı gösterilir. İlk `max_items` kayıt görünür; başlığa veya **Tümünü göster** düğmesine basılınca listenin tamamı açılır. Bütün sonuçlar mesafeye göre sıralanır. Telefonu bulunan eczanelerde **Ara** düğmesine basıldığında numaralar yüklenir; numaraya dokununca telefon araması açılır. Ayrıca her eczanede `mdi:directions` ikonlu navigasyon control button bulunur; Android'de varsayılan `geo:` işleyicisi, Apple cihazlarda sistem harita bağlantısı ve masaüstünde web haritası açılır.
 
 ## Neden Tile yerine geo_location ve özel kart?
 
@@ -101,5 +101,12 @@ Build işlemi esbuild kullanır, sürümü `package.json` içinden karta enjekte
 - Mesafe, Home Assistant ev koordinatından eczaneye kuş uçuşu hesaplanır; yol mesafesi değildir.
 - Koordinatı bulunmayan bir kayıt harita/konum entity'si olarak oluşturulamaz.
 - Kaynağa yük bindirmemek için varsayılan yenileme aralığı 30, izin verilen en düşük değer 15 dakikadır.
-- Yapılandırmalar aynı istemciyi ve kısa süreli önbelleği paylaşır; eşzamanlı güncellemeler tek kaynak isteğinde birleştirilir.
+- Yapılandırmalar aynı istemciyi paylaşır; aynı ev koordinatı ve sorgu yarıçapı için eşzamanlı güncellemeler 60 saniyelik önbellekte birleştirilir.
+- Telefonlar topluca alınmaz. Numara isteği, kimliği doğrulanmış Home Assistant WebSocket bağlantısından yalnızca mevcut entegrasyonun yönettiği bir eczane için yapılır. Kaynağın oturum anahtarı ve telefon biletleri entity niteliklerine veya karta aktarılmaz.
 - İstemci kendisini Home Assistant entegrasyonu olarak tanıtır, oturumu ve doğrulama anahtarını yeniden kullanır, kaynak reddederse el sıkışmayı yalnızca bir kez yeniler. CAPTCHA veya anti-bot mekanizmalarını aşmaya çalışmaz.
+
+## 0.6.0: İEO yeni site uyumluluğu
+
+Eski `index.php` form istekleri yerine `/api/nobetci-eczane-web/` kullanılır. Sayfadaki `boot` JSON verisinden oturum anahtarı ve ilçe listesi okunur; `nearby` JSON isteği `X-Web-Token` başlığıyla gönderilir. Oturum reddedilirse anahtar bir kez yenilenir. Kendi tarayıcınızdan cookie veya token kopyalamanız gerekmez.
+
+Önceki sürümde 12 km üzerindeki yarıçap ayarları yükseltmede 12 km'ye indirilir. Varsayılan 10 km korunur (12 km sorgusu + yerelde 10 km filtresi). Yeni servisin listesinde telefon numarası bulunmadığından `phone`/`phone_e164` nitelikleri otomatik doldurulmaz; arama için güncel kartı kullanın. Telefon kullanan eski otomasyonların bu değişikliğe göre düzenlenmesi gerekir.

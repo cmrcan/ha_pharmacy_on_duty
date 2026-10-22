@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
+try:
+    import probatio as vol
+except ImportError:  # Home Assistant releases before the schema-library migration
+    import voluptuous as vol
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -96,7 +99,7 @@ def _settings_schema(
 class NobetciEczaneConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the integration setup flow."""
 
-    VERSION = 4
+    VERSION = 5
 
     @staticmethod
     @callback

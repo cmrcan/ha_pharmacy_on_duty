@@ -174,3 +174,26 @@ test("navigasyon bağlantısı cihaz platformuna uygun oluşturulur", () => {
     /^https:\/\/www\.google\.com\/maps\/dir/,
   );
 });
+
+test("telefon isteği yalnız seçilen entity ile HA üzerinden yapılır", async () => {
+  const card = createCard({ source: "nobetci_eczane" }, {});
+  const requests = [];
+  card._hass.callWS = async (message) => {
+    requests.push(message);
+    return { phones: ["+902165551234", "javascript:alert(1)", "+902165551234", "+902125556789"] };
+  };
+  const phones = await card._phoneNumbers({ entity_id: "geo_location.eczane" });
+  assert.deepEqual(Array.from(phones), ["+902165551234", "+902125556789"]);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].type, "nobetci_eczane/phone");
+  assert.equal(requests[0].entity_id, "geo_location.eczane");
+  assert.equal(Object.keys(requests[0]).length, 2);
+});
+
+test("telefon hatası ve geçersiz numara kartta hata akışına aktarılır", async () => {
+  const card = createCard({ source: "nobetci_eczane" }, {});
+  card._hass.callWS = async () => ({ phones: ["tel:bad", ""] });
+  await assert.rejects(card._phoneNumbers({ entity_id: "geo_location.eczane" }));
+  card._hass.callWS = async () => { throw new Error("unavailable"); };
+  await assert.rejects(card._phoneNumbers({ entity_id: "geo_location.eczane" }));
+});

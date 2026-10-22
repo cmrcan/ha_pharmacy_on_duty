@@ -6,6 +6,8 @@ const COPY = {
     unavailable: "Eczane verisi kullanılamıyor",
     empty: "Şu anda listelenen nöbetçi eczane yok",
     call: "Ara",
+    loadingPhone: "Numara alınıyor…",
+    phoneError: "Numara alınamadı. Tekrar dene.",
     route: "Yol tarifi",
     refresh: "Yenile",
     km: "km",
@@ -21,6 +23,8 @@ const COPY = {
     unavailable: "Pharmacy data is unavailable",
     empty: "No duty pharmacy is currently listed",
     call: "Call",
+    loadingPhone: "Loading phone…",
+    phoneError: "Could not load phone. Retry.",
     route: "Directions",
     refresh: "Refresh",
     km: "km",
@@ -36,6 +40,8 @@ const COPY = {
     unavailable: "Apothekendaten sind nicht verfügbar",
     empty: "Derzeit ist keine Notdienstapotheke aufgeführt",
     call: "Anrufen",
+    loadingPhone: "Nummer wird geladen…",
+    phoneError: "Nummer nicht verfügbar. Erneut versuchen.",
     route: "Route",
     refresh: "Aktualisieren",
     km: "km",
@@ -221,6 +227,7 @@ class NobetciEczaneCard extends HTMLElement {
           name: state.attributes?.friendly_name,
           phone: state.attributes?.phone,
           phone_e164: state.attributes?.phone_e164,
+          phone_available: state.attributes?.phone_available,
           address: state.attributes?.address,
           directions: state.attributes?.directions,
           latitude: Number(state.attributes?.latitude),
@@ -352,6 +359,10 @@ class NobetciEczaneCard extends HTMLElement {
           background: var(--secondary-background-color);
         }
         .action.primary { color: var(--text-primary-color); background: var(--primary-color); }
+        button.action { border: 0; cursor: pointer; font-family: inherit; }
+        button.action:disabled { opacity: 0.6; cursor: wait; }
+        .phone-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+        .phone-error { color: var(--error-color); font-size: 12px; align-self: center; }
         .action ha-icon { --mdc-icon-size: 18px; }
         .message { padding: 10px 18px 22px; color: var(--secondary-text-color); }
         .expand {
@@ -529,12 +540,60 @@ class NobetciEczaneCard extends HTMLElement {
       const digits = String(pharmacy.phone).replace(/\D/g, "").replace(/^0/, "");
       const phoneHref = pharmacy.phone_e164 || `+90${digits}`;
       actions.append(this._actionLink(`tel:${phoneHref}`, "mdi:phone", copy.call, true));
+    } else if (pharmacy.phone_available && pharmacy.entity_id) {
+      actions.append(this._phoneControl(pharmacy, copy));
     }
     if (Number.isFinite(pharmacy.latitude) && Number.isFinite(pharmacy.longitude)) {
       actions.append(this._navigationControl(pharmacy, copy.route));
     }
     if (actions.childElementCount) article.append(actions);
     return article;
+  }
+
+  async _phoneNumbers(pharmacy) {
+    const result = await this._hass.callWS({
+      type: "nobetci_eczane/phone",
+      entity_id: pharmacy.entity_id,
+    });
+    const phones = [...new Set((result?.phones || []).filter(
+      (phone) => typeof phone === "string" && /^\+90\d{10}$/.test(phone),
+    ))];
+    if (!phones.length) throw new Error("Phone unavailable");
+    return phones;
+  }
+
+  _phoneControl(pharmacy, copy) {
+    const container = document.createElement("div");
+    container.className = "phone-controls";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "action primary";
+    const icon = document.createElement("ha-icon");
+    icon.setAttribute("icon", "mdi:phone");
+    const label = document.createElement("span");
+    label.textContent = copy.call;
+    button.append(icon, label);
+    const error = document.createElement("span");
+    error.className = "phone-error";
+    error.setAttribute("role", "status");
+    button.addEventListener("click", async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      label.textContent = copy.loadingPhone;
+      error.textContent = "";
+      try {
+        const phones = await this._phoneNumbers(pharmacy);
+        container.replaceChildren(...phones.map((phone) => this._actionLink(
+          `tel:${phone}`, "mdi:phone", phone, true,
+        )));
+      } catch {
+        label.textContent = copy.call;
+        button.disabled = false;
+        error.textContent = copy.phoneError;
+      }
+    });
+    container.append(button, error);
+    return container;
   }
 
   _actionLink(href, iconName, label, primary) {

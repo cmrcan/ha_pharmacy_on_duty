@@ -138,6 +138,7 @@ class DutyPharmacyGeolocationEntity(
             "configured_district": self.coordinator.district,
             "phone": phone,
             "phone_e164": phone_e164,
+            "phone_available": pharmacy.phone_count > 0,
             "address": pharmacy.address,
             "directions": pharmacy.directions,
             "neighborhood": pharmacy.neighborhood,

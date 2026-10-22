@@ -3,21 +3,25 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html import unescape
 from html.parser import HTMLParser
 import json
+from math import isfinite
 import re
 from time import monotonic
 from typing import Any
+from urllib.parse import urlsplit
 
 from aiohttp import ClientError, ClientSession
 
 from .const import SOURCE_URL
 
-API_URL = f"{SOURCE_URL}index.php"
+ORIGIN = "https://www.istanbuleczaciodasi.org.tr"
+API_URL = f"{ORIGIN}/api/nobetci-eczane-web/"
+RADIUS_PRESETS = (3, 6, 9, 12)
 USER_AGENT = (
-    "HomeAssistant-NobetciEczane/0.5.5 "
+    "HomeAssistant-NobetciEczane/0.6.0 "
     "(+https://github.com/cmrcan/HA_Pharmacy_on_Duty)"
 )
 CACHE_TTL_SECONDS = 60
@@ -34,22 +38,30 @@ class NobetciEczaneConnectionError(NobetciEczaneError):
 class NobetciEczaneResponseError(NobetciEczaneError):
     """Raised when the source returns an unexpected response."""
 
+    def __init__(self, message: str, code: str = "unavailable") -> None:
+        super().__init__(message)
+        self.code = code
 
-class _TokenParser(HTMLParser):
-    """Extract the rotating request token from the official page."""
+
+class _BootParser(HTMLParser):
+    """Read the JSON boot data embedded in the official page."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.token: str | None = None
+        self._inside = False
+        self.parts: list[str] = []
 
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
-        if tag != "input":
-            return
-        values = dict(attrs)
-        if values.get("id") == "h" or values.get("name") == "h":
-            self.token = values.get("value")
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script" and dict(attrs).get("id") == "boot":
+            self._inside = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self._inside = False
+
+    def handle_data(self, data: str) -> None:
+        if self._inside:
+            self.parts.append(data)
 
 
 class _TextParser(HTMLParser):
@@ -59,9 +71,7 @@ class _TextParser(HTMLParser):
         super().__init__()
         self.parts: list[str] = []
 
-    def handle_starttag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "br":
             self.parts.append("\n")
 
@@ -76,13 +86,36 @@ class _TextParser(HTMLParser):
         return text.strip()
 
 
-def extract_token(page: str) -> str:
-    """Extract the required rotating token from the landing page."""
-    parser = _TokenParser()
+def extract_boot(page: str) -> dict[str, Any]:
+    """Extract and validate the page's new boot contract."""
+    parser = _BootParser()
     parser.feed(page)
-    if not parser.token:
+    try:
+        boot = json.loads("".join(parser.parts))
+    except (ValueError, TypeError) as err:
+        raise NobetciEczaneResponseError("Page boot data was not found") from err
+    if (
+        not isinstance(boot, dict)
+        or not isinstance(boot.get("token"), str)
+        or not boot["token"]
+    ):
         raise NobetciEczaneResponseError("Request token was not found")
-    return parser.token
+    # Never send the session token to another origin or an unexpected endpoint.
+    if boot.get("gateUrl") != urlsplit(API_URL).path:
+        raise NobetciEczaneResponseError("Unexpected web API endpoint")
+    return boot
+
+
+def extract_token(page: str) -> str:
+    """Extract the rotating web token from the landing page."""
+    return extract_boot(page)["token"]
+
+
+def request_radius(radius_km: float) -> int:
+    """Round up to a supported query radius, then filter locally."""
+    if not isfinite(radius_km) or not 0 < radius_km <= RADIUS_PRESETS[-1]:
+        raise NobetciEczaneResponseError("Search radius must be between 1 and 12 km")
+    return next(radius for radius in RADIUS_PRESETS if radius >= radius_km)
 
 
 def html_to_text(fragment: str | None, label: str | None = None) -> str:
@@ -137,6 +170,9 @@ class Pharmacy:
     subdistrict: str
     postal_code: str
     distance_km: float | None = None
+    region_id: int | None = None
+    phone_count: int = 0
+    phone_ticket: str = field(default="", repr=False, compare=False)
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> Pharmacy:
@@ -147,7 +183,9 @@ class Pharmacy:
             if value in (None, ""):
                 return None
             try:
-                return float(value)
+                number = float(value)
+                limit = 90 if key == "lat" else 180
+                return number if isfinite(number) and abs(number) <= limit else None
             except (TypeError, ValueError):
                 return None
 
@@ -156,8 +194,12 @@ class Pharmacy:
             street = " ".join(
                 part
                 for part in (
-                    str(payload.get("cadde_sokak") or "").strip(),
-                    str(payload.get("bina_kapi") or "").strip(),
+                    str(
+                        payload.get("caddeSokak") or payload.get("cadde_sokak") or ""
+                    ).strip(),
+                    str(
+                        payload.get("binaKapi") or payload.get("bina_kapi") or ""
+                    ).strip(),
                 )
                 if part
             )
@@ -173,133 +215,237 @@ class Pharmacy:
 
         return cls(
             registration_id=str(payload.get("sicil") or ""),
-            name=turkish_title(str(payload.get("eczane_ad") or "")),
+            name=turkish_title(
+                str(payload.get("ad") or payload.get("eczane_ad") or "")
+            ),
             phone=normalize_phone(payload.get("eczane_tel")),
             address=address,
             directions=html_to_text(payload.get("tarif"), "Tarif"),
             latitude=coordinate("lat"),
             longitude=coordinate("lng"),
-            duty_ends=(str(payload["nobet_bitis"]) if payload.get("nobet_bitis") else None),
+            duty_ends=payload.get("dutyEndsAt") or payload.get("nobet_bitis") or None,
             province=str(payload.get("il") or "").strip(),
             district=str(payload.get("ilce") or "").strip(),
             neighborhood=str(payload.get("mahalle") or "").strip(),
             subdistrict=str(payload.get("semt") or "").strip(),
             postal_code=str(payload.get("posta_kodu") or "").strip(),
+            region_id=payload.get("regionId"),
+            phone_count=(
+                payload.get("phones") if isinstance(payload.get("phones"), int) else 0
+            ),
+            phone_ticket=str(payload.get("phoneTicket") or ""),
         )
 
 
 class NobetciEczaneClient:
-    """Async client for the official İstanbul/Yalova service."""
+    """Async client for the official web gate, with a private source session."""
 
     def __init__(self, session: ClientSession) -> None:
         self._session = session
         self._headers = {
             "User-Agent": USER_AGENT,
-            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept": "application/json",
             "Referer": SOURCE_URL,
-            "X-Requested-With": "XMLHttpRequest",
+            "Origin": ORIGIN,
         }
         self._token: str | None = None
-        self._pharmacy_cache: tuple[Pharmacy, ...] | None = None
-        self._pharmacy_cache_time = 0.0
-        self._cache_lock = asyncio.Lock()
+        self._cookies: dict[str, str] = {}
+        self._districts: list[dict[str, Any]] = []
+        self._cache: dict[
+            tuple[float, float, int], tuple[float, tuple[Pharmacy, ...]]
+        ] = {}
+        self._phones: dict[tuple[str, str | None], tuple[str, ...]] = {}
+        # Serialize bootstrap, token refresh and tickets from all config entries.
+        self._lock = asyncio.Lock()
 
-    async def _async_get_token(self, *, force: bool = False) -> str:
-        if self._token is not None and not force:
-            return self._token
+    def _remember_session(self, response: Any) -> None:
+        # HA's shared session may use a DummyCookieJar. Keep this source's cookie
+        # explicitly, without depending on (or modifying) the shared cookie jar.
+        if "PHPSESSID" in response.cookies:
+            self._cookies["PHPSESSID"] = response.cookies["PHPSESSID"].value
+
+    async def _async_bootstrap(self, *, force: bool = False) -> None:
+        if self._token and not force:
+            return
         try:
             async with self._session.get(
-                SOURCE_URL, headers=self._headers, timeout=15
+                SOURCE_URL, headers=self._headers, cookies=self._cookies, timeout=15
             ) as response:
                 response.raise_for_status()
-                self._token = extract_token(await response.text())
-                return self._token
-        except NobetciEczaneResponseError:
-            raise
+                self._remember_session(response)
+                boot = extract_boot(await response.text())
         except (ClientError, TimeoutError) as err:
-            raise NobetciEczaneConnectionError(str(err)) from err
+            raise NobetciEczaneConnectionError("Unable to load source session") from err
+        self._token = boot["token"]
+        self._districts = boot.get("districts", [])
+        if not isinstance(self._districts, list):
+            raise NobetciEczaneResponseError("District list is missing")
+        self._cache.clear()  # Phone tickets belong to the token that issued them.
 
-    async def _async_post(self, operation: str, **parameters: str) -> dict[str, Any]:
-        # The token can rotate between the GET and POST (observed at midnight),
-        # so retry the complete handshake once when the service rejects it.
-        last_message = "Unknown service response"
+    async def _async_call(
+        self,
+        action: str,
+        *,
+        params: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        await self._async_bootstrap()
         for attempt in range(2):
-            token = await self._async_get_token(force=attempt > 0)
-            data = {"jx": "1", "islem": operation, "h": token, **parameters}
             try:
-                async with self._session.post(
-                    API_URL, data=data, headers=self._headers, timeout=15
+                async with self._session.request(
+                    "POST" if body is not None else "GET",
+                    API_URL,
+                    params={"action": action, **(params or {})},
+                    json=body,
+                    headers={**self._headers, "X-Web-Token": self._token},
+                    cookies=self._cookies,
+                    timeout=15,
                 ) as response:
-                    response.raise_for_status()
-                    # The server labels JSON as text/html, so parse the body manually.
+                    self._remember_session(response)
+                    status = response.status
                     payload = json.loads(await response.text())
-            except json.JSONDecodeError as err:
+            except (ValueError, TypeError) as err:
                 raise NobetciEczaneResponseError("Service did not return JSON") from err
             except (ClientError, TimeoutError) as err:
-                raise NobetciEczaneConnectionError(str(err)) from err
-
+                raise NobetciEczaneConnectionError(
+                    "Unable to reach source API"
+                ) from err
             if not isinstance(payload, dict):
                 raise NobetciEczaneResponseError("Unexpected JSON structure")
-            if payload.get("error") == 0:
+            if 200 <= status < 300 and payload.get("success") is True:
                 return payload
-            self._token = None
-            last_message = html_to_text(str(payload.get("message", last_message)))
-
-        raise NobetciEczaneResponseError(last_message)
+            error = payload.get("error")
+            error = error if isinstance(error, dict) else {}
+            code = str(error.get("code") or "unavailable")
+            if code == "token" and attempt == 0:
+                await self._async_bootstrap(force=True)
+                continue
+            raise NobetciEczaneResponseError(
+                str(error.get("message") or "Source API rejected the request"), code
+            )
+        raise NobetciEczaneResponseError("Unable to refresh source token")
 
     async def async_get_districts(self, province_code: str) -> list[str]:
-        """Return available districts for an İstanbul Eczacı Odası province."""
-        payload = await self._async_post("get_ilce", il=province_code)
-        districts = payload.get("ilceler")
-        if not isinstance(districts, list):
-            raise NobetciEczaneResponseError("District list is missing")
-        return sorted(
-            {
-                str(item.get("ilce", "")).strip()
-                for item in districts
-                if isinstance(item, dict) and item.get("ilce")
-            }
-        )
-
-    async def async_get_pharmacies(self, district: str) -> list[Pharmacy]:
-        """Return the currently active duty pharmacies in a district."""
-        payload = await self._async_post("get_ilce_eczane", ilce=district)
-        pharmacies = payload.get("eczaneler")
-        if not isinstance(pharmacies, list):
-            raise NobetciEczaneResponseError("Pharmacy list is missing")
-        return [
-            Pharmacy.from_payload(item) for item in pharmacies if isinstance(item, dict)
-        ]
-
-    async def async_get_all_pharmacies(self) -> list[Pharmacy]:
-        """Return all active pharmacies with full marker metadata.
-
-        The official page uses this operation to populate its map. A short cache
-        coalesces simultaneous config-entry refreshes into one source request.
-        """
-        now = monotonic()
-        if (
-            self._pharmacy_cache is not None
-            and now - self._pharmacy_cache_time < CACHE_TTL_SECONDS
-        ):
-            return list(self._pharmacy_cache)
-
-        async with self._cache_lock:
-            now = monotonic()
-            if (
-                self._pharmacy_cache is not None
-                and now - self._pharmacy_cache_time < CACHE_TTL_SECONDS
-            ):
-                return list(self._pharmacy_cache)
-
-            payload = await self._async_post("get_eczane_markers")
-            pharmacies = payload.get("eczaneler")
-            if not isinstance(pharmacies, list):
-                raise NobetciEczaneResponseError("Pharmacy marker list is missing")
-            self._pharmacy_cache = tuple(
-                Pharmacy.from_payload(item)
-                for item in pharmacies
-                if isinstance(item, dict)
+        """Return districts from the page bootstrap, filtered by province."""
+        async with self._lock:
+            await self._async_bootstrap()
+            return sorted(
+                {
+                    str(item["ilceAd"]).strip()
+                    for item in self._districts
+                    if isinstance(item, dict)
+                    and str(item.get("ilId")) == str(province_code)
+                    and item.get("ilceAd")
+                }
             )
-            self._pharmacy_cache_time = monotonic()
-            return list(self._pharmacy_cache)
+
+    async def _async_nearby(
+        self,
+        latitude: float,
+        longitude: float,
+        radius_km: float,
+        *,
+        force: bool = False,
+    ) -> list[Pharmacy]:
+        radius = request_radius(radius_km)
+        if not (
+            isfinite(latitude)
+            and isfinite(longitude)
+            and abs(latitude) <= 90
+            and abs(longitude) <= 180
+        ):
+            raise NobetciEczaneResponseError("Invalid home coordinates")
+        key = (latitude, longitude, radius)
+        cached = self._cache.get(key)
+        if not force and cached and monotonic() - cached[0] < CACHE_TTL_SECONDS:
+            return list(cached[1])
+        payload = await self._async_call(
+            "nearby", body={"lat": latitude, "lng": longitude, "radiusKm": radius}
+        )
+        rows = payload.get("data")
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise NobetciEczaneResponseError("Pharmacy list is missing or invalid")
+        pharmacies = tuple(Pharmacy.from_payload(row) for row in rows)
+        if any(not item.registration_id or not item.name for item in pharmacies):
+            raise NobetciEczaneResponseError("Pharmacy identity is missing")
+        if len(self._cache) >= 16:
+            self._cache.clear()
+        self._cache[key] = (monotonic(), pharmacies)
+        return list(pharmacies)
+
+    async def async_get_nearby_pharmacies(
+        self, latitude: float, longitude: float, radius_km: float
+    ) -> list[Pharmacy]:
+        """Query one supported radius; the coordinator applies the exact radius."""
+        async with self._lock:
+            return await self._async_nearby(latitude, longitude, radius_km)
+
+    async def _async_phone_request(self, pharmacy: Pharmacy) -> tuple[str, ...]:
+        if not pharmacy.phone_ticket or pharmacy.region_id is None:
+            raise NobetciEczaneResponseError("Phone is unavailable", "not_found")
+        body = {
+            "regionId": pharmacy.region_id,
+            "sicil": pharmacy.registration_id,
+            "ticket": pharmacy.phone_ticket,
+        }
+        for attempt in range(2):
+            try:
+                payload = await self._async_call("phone", body=body)
+                break
+            except NobetciEczaneResponseError as err:
+                if err.code != "too_fast" or attempt:
+                    raise
+                # Follow the official client's single delayed retry; no polling.
+                await asyncio.sleep(2.1)
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise NobetciEczaneResponseError("Phone response is invalid")
+        phones = tuple(
+            dict.fromkeys(
+                phone
+                for key in ("tel", "tel2")
+                if len(phone := normalize_phone(data.get(key))) == 10
+            )
+        )
+        if not phones:
+            raise NobetciEczaneResponseError("Phone is unavailable", "not_found")
+        return phones
+
+    async def async_get_phone(
+        self, registration_id: str, latitude: float, longitude: float, radius_km: float
+    ) -> tuple[str, ...]:
+        """Resolve a single pharmacy only when the user asks to call it."""
+        async with self._lock:
+            pharmacies = await self._async_nearby(latitude, longitude, radius_km)
+            pharmacy = next(
+                (p for p in pharmacies if p.registration_id == registration_id), None
+            )
+            if pharmacy is None:
+                raise NobetciEczaneResponseError(
+                    "Pharmacy is no longer on duty", "not_found"
+                )
+            key = (registration_id, pharmacy.duty_ends)
+            if key in self._phones:
+                return self._phones[key]
+            try:
+                phones = await self._async_phone_request(pharmacy)
+            except NobetciEczaneResponseError as err:
+                if err.code != "forbidden":
+                    raise
+                # A session refresh invalidates old tickets: re-read this list once.
+                pharmacies = await self._async_nearby(
+                    latitude, longitude, radius_km, force=True
+                )
+                pharmacy = next(
+                    (p for p in pharmacies if p.registration_id == registration_id),
+                    None,
+                )
+                if pharmacy is None:
+                    raise NobetciEczaneResponseError(
+                        "Pharmacy is no longer on duty", "not_found"
+                    ) from err
+                phones = await self._async_phone_request(pharmacy)
+            if len(self._phones) >= 128:
+                self._phones.clear()
+            self._phones[key] = phones
+            return phones

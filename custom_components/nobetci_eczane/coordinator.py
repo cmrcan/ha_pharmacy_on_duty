@@ -94,31 +94,30 @@ class NobetciEczaneCoordinator(DataUpdateCoordinator[DutyPharmacyData]):
         )
 
     async def _async_update_data(self) -> DutyPharmacyData:
+        home_latitude = self.hass.config.latitude
+        home_longitude = self.hass.config.longitude
         try:
-            async with asyncio.timeout(20):
-                pharmacies = await self.client.async_get_all_pharmacies()
+            async with asyncio.timeout(50):
+                pharmacies = await self.client.async_get_nearby_pharmacies(
+                    home_latitude, home_longitude, self.radius_km
+                )
         except NobetciEczaneError as err:
             raise UpdateFailed(str(err)) from err
 
-        home_latitude = self.hass.config.latitude
-        home_longitude = self.hass.config.longitude
         enriched: list[Pharmacy] = []
         for pharmacy in pharmacies:
             if pharmacy.province.casefold() != self.province.casefold():
                 continue
             if pharmacy.latitude is None or pharmacy.longitude is None:
                 continue
-            distance = round(
-                haversine_km(
-                    home_latitude,
-                    home_longitude,
-                    pharmacy.latitude,
-                    pharmacy.longitude,
-                ),
-                2,
+            distance = haversine_km(
+                home_latitude,
+                home_longitude,
+                pharmacy.latitude,
+                pharmacy.longitude,
             )
             if distance <= self.radius_km:
-                enriched.append(replace(pharmacy, distance_km=distance))
+                enriched.append(replace(pharmacy, distance_km=round(distance, 2)))
 
         enriched.sort(
             key=lambda item: (

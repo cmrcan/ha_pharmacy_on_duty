@@ -27,10 +27,13 @@ from .const import (
     DEFAULT_RADIUS_KM,
     DEFAULT_UPDATE_INTERVAL_MINUTES,
     DOMAIN,
+    MAX_RADIUS_KM,
+    MIN_RADIUS_KM,
     PHARMACY_MARKER_URL,
 )
 from .cleanup import remove_orphaned_geolocation_entities
 from .coordinator import NobetciEczaneCoordinator
+from .websocket import async_register_phone_command
 
 NobetciEczaneConfigEntry: TypeAlias = ConfigEntry[NobetciEczaneCoordinator]
 
@@ -46,6 +49,7 @@ PLATFORMS = [
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up shared frontend resources."""
+    async_register_phone_command(hass)
     static_dir = Path(__file__).parent / "static"
     await hass.http.async_register_static_paths(
         [
@@ -160,5 +164,10 @@ async def async_migrate_entry(
         options.setdefault(CONF_PROVINCE_CODE, entry.data[CONF_PROVINCE_CODE])
         options.setdefault(CONF_PROVINCE, entry.data[CONF_PROVINCE])
         options.setdefault(CONF_DISTRICT, entry.data[CONF_DISTRICT])
-        hass.config_entries.async_update_entry(entry, version=4, options=options)
+    if entry.version < 5:
+        options[CONF_RADIUS_KM] = max(
+            MIN_RADIUS_KM,
+            min(MAX_RADIUS_KM, float(options.get(CONF_RADIUS_KM, DEFAULT_RADIUS_KM))),
+        )
+        hass.config_entries.async_update_entry(entry, version=5, options=options)
     return True

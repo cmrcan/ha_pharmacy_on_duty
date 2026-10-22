@@ -5,7 +5,10 @@ from pathlib import Path
 import sys
 from types import ModuleType
 import unittest
-
+import asyncio
+import json
+from http.cookies import SimpleCookie
+from unittest.mock import AsyncMock, patch
 
 ROOT = Path(__file__).parents[1] / "custom_components" / "nobetci_eczane"
 PACKAGE = "custom_components.nobetci_eczane"
@@ -40,8 +43,41 @@ turkish_title = api.turkish_title
 
 class ParserTests(unittest.TestCase):
     def test_extract_token(self):
-        page = '<input type="hidden" name="h" id="h" value="rotating-token"/>'
+        page = boot_page()
         self.assertEqual(extract_token(page), "rotating-token")
+
+    def test_rejects_missing_boot_and_untrusted_gate(self):
+        for page in ("<html></html>", boot_page(gate="https://example.org/api/")):
+            with self.assertRaises(api.NobetciEczaneResponseError):
+                extract_token(page)
+
+    def test_supported_radius_rounds_up_without_silently_truncating(self):
+        for value, expected in (
+            (1, 3),
+            (3, 3),
+            (4, 6),
+            (6, 6),
+            (7, 9),
+            (10, 12),
+            (12, 12),
+        ):
+            self.assertEqual(api.request_radius(value), expected)
+        for invalid in (0, 13, 100, float("nan"), float("inf")):
+            with self.assertRaises(api.NobetciEczaneResponseError):
+                api.request_radius(invalid)
+
+    def test_new_nearby_payload(self):
+        pharmacy = Pharmacy.from_payload(ROW)
+        self.assertEqual(pharmacy.name, "Eczane Çınar")
+        self.assertEqual(pharmacy.duty_ends, "2026-10-23T09:00:00+03:00")
+        self.assertEqual(pharmacy.phone, "")
+        self.assertEqual(pharmacy.phone_count, 1)
+        self.assertNotIn("ticket-1", repr(pharmacy))
+
+    def test_invalid_coordinates_are_not_mapped(self):
+        for lat, lng in (("nan", "29"), ("91", "29"), ("41", "181"), ("41", "inf")):
+            pharmacy = Pharmacy.from_payload({**ROW, "lat": lat, "lng": lng})
+            self.assertTrue(pharmacy.latitude is None or pharmacy.longitude is None)
 
     def test_html_to_text(self):
         fragment = "<br><strong>Tarif:</strong> Metro yanı\r\nSağlık ocağı karşısı"
@@ -107,6 +143,207 @@ class ParserTests(unittest.TestCase):
             pharmacy.address,
             "Kısıklı Mahallesi, Alemdar Caddesi No: 8, Kısıklı",
         )
+
+
+def boot_page(token="rotating-token", gate="/api/nobetci-eczane-web/"):
+    return (
+        '<script type="application/json" id="boot">'
+        + json.dumps(
+            {
+                "token": token,
+                "gateUrl": gate,
+                "districts": [
+                    {"ilceId": 40, "ilceAd": "Çekmeköy", "ilId": 34},
+                    {"ilceId": 32, "ilceAd": "Yalova", "ilId": 77},
+                ],
+            }
+        )
+        + "</script>"
+    )
+
+
+ROW = {
+    "sicil": 12009,
+    "ad": "ECZANE ÇINAR",
+    "il": "İstanbul",
+    "ilce": "Sancaktepe",
+    "ilceId": 41,
+    "adres": "Atatürk Mahallesi, Yüce Sokak, 12A",
+    "lat": 41.011175,
+    "lng": 29.225385,
+    "dutyEndsAt": "2026-10-23T09:00:00+03:00",
+    "regionId": 107,
+    "phones": 1,
+    "phoneTicket": "ticket-1",
+}
+
+
+class Response:
+    def __init__(self, payload, status=200, cookie=None):
+        self.body = payload if isinstance(payload, str) else json.dumps(payload)
+        self.status = status
+        self.cookies = SimpleCookie()
+        if cookie:
+            self.cookies["PHPSESSID"] = cookie
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return False
+
+    def raise_for_status(self):
+        if self.status >= 400:
+            raise AssertionError("Unexpected bootstrap failure")
+
+    async def text(self):
+        return self.body
+
+
+class Session:
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def request(self, method, url, **kwargs):
+        # Copy mutable cookies/headers to verify their value at request time.
+        kwargs = {k: dict(v) if isinstance(v, dict) else v for k, v in kwargs.items()}
+        self.calls.append((method, url, kwargs))
+        return self.responses.pop(0)
+
+    def get(self, url, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+
+def nearby(*rows):
+    return Response({"success": True, "data": list(rows)})
+
+
+def failure(code, status=403):
+    return Response(
+        {"success": False, "error": {"code": code, "message": code}}, status
+    )
+
+
+class ClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_json_contract_cookies_and_shared_cache(self):
+        session = Session(Response(boot_page(), cookie="private-session"), nearby(ROW))
+        client = api.NobetciEczaneClient(session)
+        first, second = await asyncio.gather(
+            client.async_get_nearby_pharmacies(41.03, 29.22, 10),
+            client.async_get_nearby_pharmacies(41.03, 29.22, 11),
+        )
+        self.assertEqual(first, second)
+        self.assertEqual(len(session.calls), 2)
+        method, url, options = session.calls[1]
+        self.assertEqual((method, url), ("POST", api.API_URL))
+        self.assertEqual(options["params"], {"action": "nearby"})
+        self.assertEqual(options["json"], {"lat": 41.03, "lng": 29.22, "radiusKm": 12})
+        self.assertEqual(options["headers"]["X-Web-Token"], "rotating-token")
+        self.assertEqual(options["cookies"]["PHPSESSID"], "private-session")
+
+    async def test_cache_separates_location_and_query_radius(self):
+        session = Session(Response(boot_page()), nearby(ROW), nearby(), nearby())
+        client = api.NobetciEczaneClient(session)
+        await client.async_get_nearby_pharmacies(41, 29, 3)
+        await client.async_get_nearby_pharmacies(41, 29, 6)
+        await client.async_get_nearby_pharmacies(41.1, 29, 3)
+        self.assertEqual(len(session.calls), 4)
+
+    async def test_districts_reuse_boot_data_and_filter_province(self):
+        session = Session(Response(boot_page()))
+        client = api.NobetciEczaneClient(session)
+        self.assertEqual(await client.async_get_districts("34"), ["Çekmeköy"])
+        self.assertEqual(await client.async_get_districts("77"), ["Yalova"])
+        self.assertEqual(len(session.calls), 1)
+
+    async def test_refreshes_rejected_token_once(self):
+        session = Session(
+            Response(boot_page()),
+            failure("token", 401),
+            Response(boot_page("new-token")),
+            nearby(ROW),
+        )
+        client = api.NobetciEczaneClient(session)
+        self.assertEqual(len(await client.async_get_nearby_pharmacies(41, 29, 3)), 1)
+        self.assertEqual(session.calls[-1][2]["headers"]["X-Web-Token"], "new-token")
+
+    async def test_repeated_token_rejection_does_not_loop(self):
+        session = Session(
+            Response(boot_page()),
+            failure("token", 401),
+            Response(boot_page("new-token")),
+            failure("token", 401),
+        )
+        client = api.NobetciEczaneClient(session)
+        with self.assertRaises(api.NobetciEczaneResponseError):
+            await client.async_get_nearby_pharmacies(41, 29, 3)
+        self.assertEqual(len(session.calls), 4)
+
+    async def test_rate_limit_and_malformed_data_do_not_look_like_empty_results(self):
+        for response in (
+            failure("rate_limited", 429),
+            Response("<html>offline</html>"),
+            Response({"success": True, "data": {}}),
+            nearby({"lat": 41}),
+        ):
+            session = Session(Response(boot_page()), response)
+            client = api.NobetciEczaneClient(session)
+            with self.assertRaises(api.NobetciEczaneResponseError):
+                await client.async_get_nearby_pharmacies(41, 29, 3)
+            self.assertEqual(len(session.calls), 2)
+
+    async def test_phone_is_requested_only_on_demand_and_cached(self):
+        session = Session(
+            Response(boot_page()),
+            nearby(ROW),
+            Response({"success": True, "data": {"tel": "02165551234", "tel2": ""}}),
+        )
+        client = api.NobetciEczaneClient(session)
+        await client.async_get_nearby_pharmacies(41, 29, 3)
+        self.assertEqual(len(session.calls), 2)
+        for _ in range(2):
+            self.assertEqual(
+                await client.async_get_phone("12009", 41, 29, 3), ("2165551234",)
+            )
+        self.assertEqual(len(session.calls), 3)
+        self.assertEqual(
+            session.calls[-1][2]["json"],
+            {"regionId": 107, "sicil": "12009", "ticket": "ticket-1"},
+        )
+
+    async def test_phone_stale_ticket_refreshes_list_once(self):
+        session = Session(
+            Response(boot_page()),
+            nearby(ROW),
+            failure("forbidden"),
+            nearby({**ROW, "phoneTicket": "ticket-2"}),
+            Response({"success": True, "data": {"tel": "02165551234"}}),
+        )
+        client = api.NobetciEczaneClient(session)
+        self.assertEqual(
+            await client.async_get_phone("12009", 41, 29, 3), ("2165551234",)
+        )
+        self.assertEqual(session.calls[-1][2]["json"]["ticket"], "ticket-2")
+
+    async def test_phone_too_fast_uses_one_delayed_retry(self):
+        session = Session(
+            Response(boot_page()),
+            nearby(ROW),
+            failure("too_fast"),
+            Response({"success": True, "data": {"tel": "02165551234"}}),
+        )
+        client = api.NobetciEczaneClient(session)
+        with patch.object(api.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+            await client.async_get_phone("12009", 41, 29, 3)
+            sleep.assert_awaited_once_with(2.1)
+
+    async def test_missing_pharmacy_never_requests_phone(self):
+        session = Session(Response(boot_page()), nearby())
+        client = api.NobetciEczaneClient(session)
+        with self.assertRaises(api.NobetciEczaneResponseError):
+            await client.async_get_phone("12009", 41, 29, 3)
+        self.assertEqual(len(session.calls), 2)
 
 
 if __name__ == "__main__":

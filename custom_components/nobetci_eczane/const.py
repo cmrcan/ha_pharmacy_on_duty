@@ -15,7 +15,7 @@ PROVINCES: dict[str, str] = {
 
 DEFAULT_RADIUS_KM = 10
 MIN_RADIUS_KM = 1
-MAX_RADIUS_KM = 100
+MAX_RADIUS_KM = 12
 
 DEFAULT_UPDATE_INTERVAL_MINUTES = 30
 MIN_UPDATE_INTERVAL_MINUTES = 15
@@ -25,4 +25,4 @@ SOURCE_URL = "https://www.istanbuleczaciodasi.org.tr/nobetci-eczane/"
 
 CARD_URL = "/nobetci_eczane/nobetci-eczane-card.js"
 PHARMACY_MARKER_URL = "/nobetci_eczane/pharmacy-marker.svg"
-CARD_VERSION = "0.5.5"
+CARD_VERSION = "0.6.0"
